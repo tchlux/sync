@@ -12,6 +12,9 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
 
   Open a new shell (or manually `source <path to sync script>`).
 
+  The default configuration script will walk through the process for
+  setting up the `sync` command on the local machine.
+
 --------------------------------------------------------------------
 
 # Built-in README
