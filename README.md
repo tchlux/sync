@@ -19,7 +19,7 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
   This file provides the command for "sync"ing the present working
   directory with a master directory. It keeps track of a file called
   `.sync_time` with the recorded output of `python -c "import time;
-  print(int(time.time()))" to determine which repository is more
+  print(int(time.time()))"` to determine which repository is more
   recent. Then the `rsync` utility is used to transfer (and delete if
   appropriate) files between the files at
 
