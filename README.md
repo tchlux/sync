@@ -18,7 +18,7 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
 
 --------------------------------------------------------------------
 
-# Documentation from code
+# Documentation in code
 
   This file provides a command-line function `sync` for
   synchronizing a local directory with a server directory through
@@ -35,7 +35,7 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
   interface, `pwd`, `export`, `cd`, `mkdir`, `read`, `echo`, `cat`,
    `sed`, `grep`, `rsync` and `python`.
 
-  The full list of assumed shell behaviors follow:
+##  EXPECTED SHELL SYNTAX AND COMMANDS
 
     $(<command to execute>)
     ${<string>:-<value if string is empty>}

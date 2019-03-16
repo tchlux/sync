@@ -28,7 +28,7 @@
 #   interface, `pwd`, `export`, `cd`, `mkdir`, `read`, `echo`, `cat`,
 #    `sed`, `grep`, `rsync` and `python`.
 # 
-#   The full list of assumed shell behaviors follow:
+# ##  EXPECTED SHELL SYNTAX AND COMMANDS
 # 
 #     $(<command to execute>)
 #     ${<string>:-<value if string is empty>}
