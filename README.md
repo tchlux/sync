@@ -8,8 +8,8 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
   want).
 
   Add a line `source <path to sync script>` to your shell
-  initialization file, most shells look at `.profile` in the users
-  home directory when initializing.
+  initialization file, most shells look at `.profile` in the user
+  home directory during initialization.
 
   Open a new shell or manually enter `source <path to sync script>`.
 
@@ -78,9 +78,9 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
     $ sync [--status] [--configure] [path=$SYNC_LOCAL_DIR]
 
   The `sync` command will synchronize the entire local directory if
-  no path nor options are specified. If a path is specified, it MUST
-  be contained within SYNC_LOCAL_DIR and only that subset will be
-  synchronized.
+  no path nor options are specified. If a path is specified, it
+  *must* be contained within `$SYNC_LOCAL_DIR` and only that subset
+  will be synchronized.
 
   Executing with the `--status` option will get the last
   modification time of the server and local directories, print them,
@@ -88,7 +88,7 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
 
   Executing with the `--configure` command will run the initial
   configuration script to update the stored configuration variables
-  expressed in this file.
+  expressed in the local sync script.
 
   A script is provided that will automatically walk you through
   configuration on your local machine. If this file is executed and

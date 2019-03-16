@@ -71,9 +71,9 @@
 #     $ sync [--status] [--configure] [path=$SYNC_LOCAL_DIR]
 # 
 #   The `sync` command will synchronize the entire local directory if
-#   no path nor options are specified. If a path is specified, it MUST
-#   be contained within SYNC_LOCAL_DIR and only that subset will be
-#   synchronized.
+#   no path nor options are specified. If a path is specified, it
+#   *must* be contained within `$SYNC_LOCAL_DIR` and only that subset
+#   will be synchronized.
 # 
 #   Executing with the `--status` option will get the last
 #   modification time of the server and local directories, print them,
@@ -81,7 +81,7 @@
 # 
 #   Executing with the `--configure` command will run the initial
 #   configuration script to update the stored configuration variables
-#   expressed in this file.
+#   expressed in the local sync script.
 # 
 #   A script is provided that will automatically walk you through
 #   configuration on your local machine. If this file is executed and
