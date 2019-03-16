@@ -1,5 +1,5 @@
 # sync
-A minimal (efficient) Posix-based file synchronization utility built on rsync.
+  A minimal Posix-based file synchronization utility built on rsync.
 
 ## INSTALLATION
 
