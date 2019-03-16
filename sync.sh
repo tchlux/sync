@@ -1,36 +1,92 @@
-
+# 
+#    _______________________________
+#   | AUTHOR   |  Thomas C.H. Lux   |
+#   |          |                    |
+#   | EMAIL    |  tchlux@vt.edu     |
+#   |          |                    |
+#   | VERSION  |  2019.03.16        |
+#   |          |  Basic sync script |
+#   |          |  with `sync` func. |
+#   |__________|____________________|
+# 
+# 
 # --------------------------------------------------------------------
 #                             README
 # 
-# This file provides the command for "sync"ing the present working
-# directory with a master directory. It keeps track of a file called
-# '.sync_time' with the recorded output of $(date) to determine which
-# repository is more recent. Then the 'rsync' utility is used to
-# transfer (and delete if appropriate) files between the files at
+#   This file provides a command-line function `sync` for
+#   synchronizing a local directory with a server directory through
+#   `ssh` and `rsync`. It keeps track of a file called `.sync_time`
+#   containing the time since the Epoch in seconds to determine which
+#   repository is more recent. Then the `rsync` utility is used to
+#   transfer (and delete if appropriate) files between
+#   `$SYNC_LOCAL_DIR` and `$SYNC_SERVER:$SYNC_SERVER_DIR` using the
+#   efficient delta method of `rsync`. This can be very fast even for
+#   large directories, certainly more so than a full `scp`.
 # 
-#    $SYNC_LOCAL_DIR   <--->   $SYNC_SERVER:$SYNC_SERVER_DIR
+#   This tool provides a one-liner replacement for something like
+#   Dropbox or Git that can be used easily from a server with a POSIX
+#   interface, `pwd`, `export`, `cd`, `mkdir`, `read`, `echo`, `cat`,
+#    `sed`, `grep`, `rsync` and `python`.
+# 
+#   The full list of assumed shell behaviors follow:
+# 
+#     $(<command to execute>)
+#     ${<string>:-<value if string is empty>}
+#     ${<string>%<pattern to remove from end of string>}
+#     ${<string>#<pattern to remove from beginning of string>}
+#     ${#<string to measure length>}
+#     ${<string>:<integer slice from>:<integer slice to>}
+#     <command-1> | <command taking input from command-1 as a file>
+#     <command> > <stdout redirect> 2> <stderr redirect>
+#     [ <conditional expression to evaluate> ]
+#     [ <conditional or 1> || <conditional or 2> ]
+#     [ <integer is equal> -eq <to this integer> ]
+#     [ <integer is greater> -gt <than this integer> ]
+#     [ -f <this file exists?> ]
+#     [ -d <this directory exists?> ]
+#     [ ! <conditional to be negated> ]
+# 
+#     func () { <body of function that takes arguments as $1 ...> }
+#     while <loop condition> ; do <body commands> ; done
+#     if <condition> ; then <true body> ; elif <condition> ; then <true body> ; else <false body> ; fi
+# 
+#   Along with the standard POSIX expectations above, the following
+#   commands are used by this program with the demonstrated syntax.
+# 
+#     pwd (no arguments / prints full path to present working directory)
+#     export <varname>=<value>
+#     cd <directory to move to>
+#     mkdir -p <directory to create if it does not already exist>
+#     read -e -p "<user input prompted with directory tab-auto-complete>"
+#     echo "<string to output to stdout>"
+#     cat <path to file that will be printed to stdout>
+#     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
+#     grep "<regular expression>" <file to find matches>
+#     rsync -az -e "<remote shell command>" --update --delete --progress <source-patah> <destination-path>
+#     python -c "<python 2 / 3 compatible code>"
 # 
 # 
-# USAGE:
+# ## USAGE:
 # 
-#    $ sync [--status] [--configure] [path=$SYNC_LOCAL_DIR]
+#     $ sync [--status] [--configure] [path=$SYNC_LOCAL_DIR]
 # 
-# The `sync` command will synchronize the entire local directory if no
-# path nor options are specified. If a path is specified, it MUST be
-# contained within SYNC_LOCAL_DIR and only that subset will be
-# synchronized.
+#   The `sync` command will synchronize the entire local directory if
+#   no path nor options are specified. If a path is specified, it MUST
+#   be contained within SYNC_LOCAL_DIR and only that subset will be
+#   synchronized.
 # 
-# Executing with the '--status' option will get the last modification
-# time of the server and local directories, print them, and exit.
+#   Executing with the `--status` option will get the last
+#   modification time of the server and local directories, print them,
+#   and exit.
 # 
-# Executing with the '--configure' command will run the initial
-# configuration script to update the stored configuration variables
-# expressed in this file.
+#   Executing with the `--configure` command will run the initial
+#   configuration script to update the stored configuration variables
+#   expressed in this file.
 # 
-# A script is provided that will automatically walk you through
-# configuration on your local machine. If this file is executed and
-# the value $SYNC_SCRIPT_PATH does not point to a valid file, a prompt
-# to automatically (re)configure will appear.
+#   A script is provided that will automatically walk you through
+#   configuration on your local machine. If this file is executed and
+#   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
+#   prompt to automatically (re)configure will appear.
 # 
 # CONFIGURATION VARIABLES FOR "SYNC" OPERATION.
 # 
@@ -57,17 +113,23 @@ time_in_seconds () {
 # passwordless login has been properly configured on the local machine
 # (if it is not, it will attempt to configure that as well).
 sync_configure () {
+    # Set the default values for all variables if they are not defined.
+    user_server=${user_server:-$(whoami)@$(hostname)}
+    user_server_dir=${user_server_dir:-Sync}
+    user_local_dir=${user_local_dir:-"$(pwd)/Sync"}
+    user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+    # Query the user for the values to put in their place.
     echo ""
     echo "----------------------------------------------------------------------"
     echo "Configuring 'sync' function."
     echo ""
-    read -e -p "Server ssh identity (default '$(whoami)@$(hostname)'): " user_server
-    read -e -p "  extra ssh flags (default ''): " user_ssh_args
-    read -e -p "Master sync dirctory on server (default 'Sync'): " user_server_dir
-    read -e -p "Local sync dirctory (default '$(pwd)/Sync'): " user_local_dir
-    read -e -p "Full path to 'sync' script (default '$(pwd)/sync.sh'): " user_script_path
+    read -e -p "Server ssh identity (default '$user_server'): " user_server
+    read -e -p "  extra ssh flags (default '$user_ssh_args'): " user_ssh_args
+    read -e -p "Master sync dirctory on server (default '$user_server_dir'): " user_server_dir
+    read -e -p "Local sync dirctory (default '$user_local_dir'): " user_local_dir
+    read -e -p "Full path to THIS 'sync' script (default '$user_script_path'): " user_script_path
     echo ""
-    # Set the default values for all unprovided variables.
+    # Set the default values for all unprovided variables from the user.
     user_server=${user_server:-$(whoami)@$(hostname)}
     user_server_dir=${user_server_dir:-Sync}
     user_local_dir=${user_local_dir:-"$(pwd)/Sync"}
@@ -80,9 +142,9 @@ sync_configure () {
     done
     # Convert the provided path to an absolute path.
     start_dir=$(pwd)
-    cd $(dirname $user_script_path)
+    cd $(dirname $user_script_path) > /dev/null 2> /dev/null
     user_script_path=$(pwd)/$(basename $user_script_path)
-    cd $start_dir
+    cd $start_dir > /dev/null 2> /dev/null
     # Strip the trailing "/" from the provided path names.
     user_server_dir="${user_server_dir%/}"
     user_local_dir="${user_local_dir%/}"
@@ -91,15 +153,15 @@ sync_configure () {
     # Replace this file with a configured version of itself. Each line
     # that defines "replacement" is escaping "sed" special characters.
     # Each line that starts with "sed" is updating this file.
-    replacement="$(echo "$user_server" | sed -e 's/[\/&]/\\&/g')"
+    replacement="$(echo "$user_server" | sed 's/[\/&]/\\&/g')"
     sed -i.backup "s/^export SYNC_SERVER=.*$/export SYNC_SERVER=$replacement/g" $user_script_path
-    replacement="$(echo "\"$user_ssh_args\"" | sed -e 's/[\/&]/\\&/g')"
+    replacement="$(echo "\"$user_ssh_args\"" | sed 's/[\/&]/\\&/g')"
     sed -i.backup "s/^export SYNC_SSH_ARGS=.*$/export SYNC_SSH_ARGS=$replacement/g" $user_script_path
-    replacement="$(echo "$user_server_dir" | sed -e 's/[\/&]/\\&/g')"
+    replacement="$(echo "$user_server_dir" | sed 's/[\/&]/\\&/g')"
     sed -i.backup "s/^export SYNC_SERVER_DIR=.*$/export SYNC_SERVER_DIR=$replacement/g" $user_script_path
-    replacement="$(echo "$user_local_dir" | sed -e 's/[\/&]/\\&/g')"
+    replacement="$(echo "$user_local_dir" | sed 's/[\/&]/\\&/g')"
     sed -i.backup "s/^export SYNC_LOCAL_DIR=.*$/export SYNC_LOCAL_DIR=$replacement/g" $user_script_path
-    replacement="$(echo "$user_script_path" | sed -e 's/[\/&]/\\&/g')"
+    replacement="$(echo "$user_script_path" | sed 's/[\/&]/\\&/g')"
     sed -i.backup "s/^export SYNC_SCRIPT_PATH=.*$/export SYNC_SCRIPT_PATH=$replacement/g" $user_script_path
     rm $user_script_path.backup
     echo "done."
@@ -123,8 +185,8 @@ sync_configure () {
     echo ""
     if [ ${#pwd_ls} -gt 0 ] ; then
 	# Get the "home" directory using "cd"
-	start_dir=$(pwd); cd
-	home=$(pwd);      cd $start_dir
+	start_dir=$(pwd); cd > /dev/null 2> /dev/null
+	home=$(pwd);      cd $start_dir > /dev/null 2> /dev/null
 	echo "Checking '$home' for RSA key.."
 	echo ""
 	# Check for the existence of ".ssh" and "id_rsa.pub", if the
@@ -188,11 +250,11 @@ sync () {
 	elif [ ! -d "$1" ] ; then
 	    echo "'$1' directory does not exist."
 	    return 1
-	else cd $1
+	else cd $1 > /dev/null 2> /dev/null
 	fi
     else
 	# By default, when no parameters are provided, sync whole directory.
-	cd $SYNC_LOCAL_DIR
+	cd $SYNC_LOCAL_DIR > /dev/null 2> /dev/null
     fi
     # Call the "sync_status" function that updates the time stamps.
     sync_status
@@ -245,7 +307,7 @@ sync () {
     fi
     echo ""
     # Return to the starting directory.
-    cd $start_dir
+    cd $start_dir > /dev/null 2> /dev/null
 }
 
 # ====================================================================
