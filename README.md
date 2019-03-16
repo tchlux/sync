@@ -4,8 +4,7 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
 ## INSTALLATION
 
   Download the file `sync.sh` in this repository and move it to
-  whatever directory you want to keep it in (and whatever name you
-  want).
+  a permanent directory, renaming it if appropriate / desired.
 
   Add a line `source <path to sync script>` to your shell
   initialization file, most shells look at `.profile` in the user
