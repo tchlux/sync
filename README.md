@@ -8,7 +8,8 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
   want).
 
   Add a line `source <path to sync script>` to your shell
-  initialization file, most shells look at `.profile` when loading.
+  initialization file, most shells look at `.profile` in the users
+  home directory when initializing.
 
   Open a new shell or manually enter `source <path to sync script>`.
 
