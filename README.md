@@ -8,9 +8,9 @@ A minimal (efficient) Posix-based file synchronization utility built on rsync.
   want).
 
   Add a line `source <path to sync script>` to your shell
-  initialization file (in bash that could be `.bashrc`).
+  initialization file, most shells look at `.profile` when loading.
 
-  Open a new shell (or manually `source <path to sync script>`).
+  Open a new shell or manually enter `source <path to sync script>`.
 
   The default configuration script will walk through the process for
   setting up the `sync` command on the local machine.
