@@ -54,9 +54,12 @@
 #   commands are used by this program with the demonstrated syntax.
 # 
 #     pwd (no arguments / prints full path to present working directory)
-#     export <varname>=<value>
+#     dirname <path to get only directory name>
+#     basename <path to get only file name>
+#     rm <path to file to remove>
 #     cd <directory to move to>
 #     mkdir -p <directory to create if it does not already exist>
+#     export <varname>=<value>
 #     read -e -p "<user input prompted with directory tab-auto-complete>"
 #     echo "<string to output to stdout>"
 #     cat <path to file that will be printed to stdout>
@@ -179,11 +182,11 @@ sync_configure () {
 	echo " SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
     fi
     echo ""
-    read -p "Configure passwordless ssh (y/n) [n]? " pwd_ls
-    pwd_ls=${pwd_ls:-n}
-    pwd_ls=$(echo -n "$pwd_ls" | grep "^[Yy][eE]*[sS]*$")
-    echo ""
-    if [ ${#pwd_ls} -gt 0 ] ; then
+    read -p "Configure passwordless ssh (y/n) [n]? " user_query
+    user_query=${user_query:-n}
+    user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
+    if [ ${#user_query} -gt 0 ] ; then
+	echo ""
 	# Get the "home" directory using "cd"
 	start_dir=$(pwd); cd > /dev/null 2> /dev/null
 	home=$(pwd);      cd $start_dir > /dev/null 2> /dev/null
@@ -199,10 +202,27 @@ sync_configure () {
 	# Perform the copy-id operation.
 	ssh-copy-id $SYNC_SERVER
     fi
+    echo ""
+    read -p "Add 'sync' command to shell initialization (y/n) [y]? " user_query
+    user_query=${user_query:-y}
+    user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
+    if [ ${#user_query} -gt 0 ] ; then
+	# Get the "home" directory using "cd"
+	start_dir=$(pwd); cd > /dev/null 2> /dev/null
+	home=$(pwd);      cd $start_dir > /dev/null 2> /dev/null
+	# Ask where to put the 'source' line.
+	read -e -p "Shell initialization file (default '$home/.profile'): " user_shell_init	
+	user_shell_init=${user_shell_init:-"$home/.profile"}
+	# Make the directory if it does not exist.
+	mkdir -p $(dirname $user_shell_init)
+	# Append a line to the file.
+	echo "source $SYNC_SCRIPT_PATH" >> $user_shell_init
+	echo ""
+    fi
     echo "----------------------------------------------------------------------"
     echo ""
 }
-
+echo "loaded the sync file.."
 # Get the last synchronization time of the server and the local directories.
 # Print the times to the user and update shell variables
 # SYNC_SERVER_TIMESTAMP and SYNC_LOCAL_TIMESTAMP that describe the

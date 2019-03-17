@@ -1,5 +1,5 @@
 # sync
-  A minimal Posix-based file synchronization utility built on rsync.
+  A minimal Posix-compatible file synchronization utility built on `rsync`.
 
 ## INSTALLATION
 
@@ -60,9 +60,12 @@
   commands are used by this program with the demonstrated syntax.
 
     pwd (no arguments / prints full path to present working directory)
-    export <varname>=<value>
+    dirname <path to get only directory name>
+    basename <path to get only file name>
+    rm <path to file to remove>
     cd <directory to move to>
     mkdir -p <directory to create if it does not already exist>
+    export <varname>=<value>
     read -e -p "<user input prompted with directory tab-auto-complete>"
     echo "<string to output to stdout>"
     cat <path to file that will be printed to stdout>
