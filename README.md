@@ -6,11 +6,7 @@
   Download the file `sync.sh` in this repository and move it to
   a permanent directory, renaming it if appropriate / desired.
 
-  Add a line `source <path to sync script>` to your shell
-  initialization file, most shells look at `.profile` in the user
-  home directory during initialization.
-
-  Open a new shell or manually enter `source <path to sync script>`.
+  In the shell, type `source <path to sync script>`.
 
   The default configuration script will walk through the process for
   setting up the `sync` command on the local machine.
