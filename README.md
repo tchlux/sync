@@ -93,4 +93,3 @@
   configuration on your local machine. If this file is executed and
   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
   prompt to automatically (re)configure will appear.
-

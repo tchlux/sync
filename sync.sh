@@ -321,5 +321,30 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$SYNC_SCRIPT_PATH" ] ; then
     confirm=${confirm:-y}
     confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
     # Only continue if the command was confirmed.
-    if [ ${#confirm} -gt 0 ] ; then sync_configure ; fi
+    if [ ${#confirm} -gt 0 ] ; then
+	sync_configure
+    else
+	# If the user refuses to configure the sync script, then update
+	# the file to prevent it from asking the question again.
+	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+	echo "To prevent further requests, provide the"
+	read -e -p " full path to the 'sync' script: " user_script_path
+	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+	# Check to make sure the script file actually exists at that location.
+	while [ ! -f "$user_script_path" ] ; do
+	    echo "No file exists at '$user_script_path'."
+	    read -e -p "Enter full path to 'sync' script: " user_script_path
+	    user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+	done
+	# Convert the provided path to an absolute path.
+	start_dir=$(pwd)
+	cd $(dirname $user_script_path) > /dev/null 2> /dev/null
+	user_script_path=$(pwd)/$(basename $user_script_path)
+	cd $start_dir > /dev/null 2> /dev/null
+	# Update the "export SYNC_SCRIPT_PATH" line to prevent further questioning.
+	replacement="$(echo "$user_script_path" | sed 's/[\/&]/\\&/g')"
+	sed -i.backup "s/^export SYNC_SCRIPT_PATH=.*$/export SYNC_SCRIPT_PATH=$replacement/g" $user_script_path
+	rm $user_script_path.backup
+	echo ""
+    fi
 fi
