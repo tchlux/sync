@@ -84,7 +84,7 @@
   modification time of the server and local directories, print them,
   and exit.
 
-  Executing with the `--configure` command will run the initial
+  Executing with the `--configure` option will run the initial
   configuration script to update the stored configuration variables
   expressed in the local sync script.
 
