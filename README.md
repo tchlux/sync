@@ -92,3 +92,9 @@
   configuration on your local machine. If this file is executed and
   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
   prompt to automatically (re)configure will appear.
+
+
+## TO-DO
+
+  [ ] Automatically pick a different .*profile file if it exists in
+      the user home directory. Current default is always `.profile`.
