@@ -4,7 +4,7 @@
 #   |          |                    |
 #   | EMAIL    |  tchlux@vt.edu     |
 #   |          |                    |
-#   | VERSION  |  2019.03.14        |
+#   | VERSION  |  2019.04.02        |
 #   |          |  Basic sync script |
 #   |          |  with `sync` func. |
 #   |__________|____________________|
@@ -193,6 +193,10 @@ sync_configure () {
     echo "done."
     # Export the user variables by re-sourcing this file.
     source "$user_script_path"
+    # Make sure the "SYNC_LOCAL_DIR" exists.
+    cd > /dev/null 2> /dev/null
+    mkdir -p "$SYNC_LOCAL_DIR"
+    cd "$start_dir" > /dev/null 2> /dev/null
     # Print out the configuration to the user.
     echo ""
     sync_show_configuration
@@ -226,7 +230,7 @@ sync_configure () {
 	read -e -p "Shell initialization file (default '$home/.profile'): " user_shell_init	
 	user_shell_init=${user_shell_init:-"$home/.profile"}
 	# Make the directory if it does not exist.
-	mkdir -p $(dirname $user_shell_init)
+	mkdir -p "$(dirname $user_shell_init)"
 	# Append a line to the file.
 	echo "source $home/${SYNC_SCRIPT_PATH#$home/}" >> $user_shell_init
 	echo ""
@@ -244,11 +248,11 @@ sync_status () {
     start_dir=$(pwd)
     # Get the full path to the "local_dir" in case "SYNC_LOCAL_DIR" is relative.
     cd > /dev/null 2> /dev/null
+    # Create the "sync" directory in local in case it does not exist.
+    mkdir -p "$SYNC_LOCAL_DIR"
     cd "$SYNC_LOCAL_DIR" > /dev/null 2> /dev/null
     local_dir=$(pwd)
     cd "$start_dir" > /dev/null 2> /dev/null
-    # Create the "sync" directory in local in case it does not exist.
-    mkdir -p $local_dir
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
     SYNC_SERVER_TIMESTAMP=$(ssh $SYNC_SSH_ARGS $SYNC_SERVER "cat $SYNC_SERVER_DIR/.sync_time 2> /dev/null || echo '0'") || return 1
     # Create a ".sync_time" file locally if it does not exist.
@@ -279,6 +283,7 @@ sync () {
     start_dir=$(pwd)
     # Get the full path to the "local_dir" in case "SYNC_LOCAL_DIR" is relative.
     cd > /dev/null 2> /dev/null
+    mkdir -p "$SYNC_LOCAL_DIR"
     cd "$SYNC_LOCAL_DIR" > /dev/null 2> /dev/null
     local_dir=$(pwd)
     cd "$start_dir" > /dev/null 2> /dev/null
@@ -325,7 +330,6 @@ sync () {
     # Create directories in master (in case the path does not exist).
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
     ( ssh $SSH_ARGS $SYNC_SERVER "mkdir -p $SYNC_SERVER_DIR/$relative || exit 0" ) || return 1
-    cd "$sync_dir" > /dev/null 2> /dev/null
     # Make sure that we are actually in a subdirecty of "SYNC_LOCAL_DIR".
     if [ "${relative:0:1}" == "/" ] ; then
     	# Raise an error.
@@ -337,16 +341,14 @@ sync () {
 	    extra_args=" -e \"ssh $SYNC_SSH_ARGS\""
 	fi
     	# Execute the command.
-    	echo "Sync from: "$src
-    	echo " --> to:   "$dst
+    	echo "Sync from: $src"
+    	echo " --> to:   $dst"
     	echo ""
     	echo "rsync -az$extra_args --update --delete --progress $src $dst"
     	echo ""
 	# Wrap the asking a question into cd'ing to the start
 	# directory in case the user cancels during this operation.
-	cd "$start_dir" > /dev/null 2> /dev/null
 	read -p "Confirm (y/n) [y]? " confirm
-	cd "$sync_dir" > /dev/null 2> /dev/null
 	confirm=${confirm:-y}
 	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
 	# Only continue if the command was confirmed.
@@ -362,11 +364,33 @@ sync () {
 		# Don't pass any special ssh arguments.
     		rsync -az --update --delete --progress $src $dst
 	    fi
+	else
+	    read -p "Swap order and sync (y/n) [n]? " confirm
+	    confirm=${confirm:-n}
+	    confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
+	    if [ ${#confirm} -gt 0 ] ; then
+		# Swap the variables and execute.
+		confirm="$src"
+		src="$dst"
+		dst="$confirm"
+		echo ""
+    		# Always update the ".sync_time" date on self.
+    		time_in_seconds > $local_dir/.sync_time
+		# Sync (and hence copy the '.sync_time' file as well.
+		if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
+		    # Pass special ssh arguments to rsync.
+    		    rsync -az -e "ssh $SYNC_SSH_ARGS" --update --delete --progress $src $dst
+		else
+		    # Don't pass any special ssh arguments.
+    		    rsync -az --update --delete --progress $src $dst
+		fi		
+	    fi
+	    # ^ End of "Swap order?" block.
 	fi
+	# ^ End of "Confirm sync?" block.
     fi
+    # ^ End of "Is valid path to synchronize?" block.
     echo ""
-    # Return to the starting directory.
-    cd "$start_dir" > /dev/null 2> /dev/null
 }
 
 # ====================================================================

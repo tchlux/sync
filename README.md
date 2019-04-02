@@ -94,7 +94,7 @@
   prompt to automatically (re)configure will appear.
 
 
-## TO-DO
+## PLANNED MODIFICATIONS
 
-  [ ] Automatically pick a different .*profile file if it exists in
+- [ ] Automatically pick a different .*profile file if it exists in
       the user home directory. Current default is always `.profile`.
