@@ -240,20 +240,27 @@ sync_configure () {
 # SYNC_SERVER_TIMESTAMP and SYNC_LOCAL_TIMESTAMP that describe the
 # previous update time in seconds.
 sync_status () {
+    # Get the starting directory (to return to it once complete).
+    start_dir=$(pwd)
+    # Get the full path to the "local_dir" in case "SYNC_LOCAL_DIR" is relative.
+    cd > /dev/null 2> /dev/null
+    cd "$SYNC_LOCAL_DIR" > /dev/null 2> /dev/null
+    local_dir=$(pwd)
+    cd "$start_dir" > /dev/null 2> /dev/null
     # Create the "sync" directory in local in case it does not exist.
-    mkdir -p $SYNC_LOCAL_DIR
+    mkdir -p $local_dir
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
     SYNC_SERVER_TIMESTAMP=$(ssh $SYNC_SSH_ARGS $SYNC_SERVER "cat $SYNC_SERVER_DIR/.sync_time 2> /dev/null || echo '0'") || return 1
     # Create a ".sync_time" file locally if it does not exist.
-    if [ ! -f $SYNC_LOCAL_DIR/.sync_time ] ; then
+    if [ ! -f $local_dir/.sync_time ] ; then
 	# If a local sync doesn't exist, we need to set the local time
 	# stamp to be a value certainly less, and copy from the
 	# master to the local! This date corresponds to '0' seconds.
-	echo "0" > $SYNC_LOCAL_DIR/.sync_time
+	echo "0" > $local_dir/.sync_time
     fi
     # Default value of the master timestamp is the second count "0".
     export SYNC_SERVER_TIMESTAMP=${SYNC_SERVER_TIMESTAMP:-"0"}
-    export SYNC_LOCAL_TIMESTAMP=$(cat $SYNC_LOCAL_DIR/.sync_time)
+    export SYNC_LOCAL_TIMESTAMP=$(cat $local_dir/.sync_time)
     # Ask about optional extra configuration steps..
     echo ""
     echo "-------------------------------------------"
@@ -322,7 +329,7 @@ sync () {
     # Make sure that we are actually in a subdirecty of "SYNC_LOCAL_DIR".
     if [ "${relative:0:1}" == "/" ] ; then
     	# Raise an error.
-    	echo "ERROR: Must specify (a subset of) '$SYNC_LOCAL_DIR' to sync."
+    	echo "ERROR: Must specify (a subset of) '$local_dir' to sync."
 	echo "  $relative"
     else
 	extra_args=""
@@ -346,7 +353,7 @@ sync () {
 	if [ ${#confirm} -gt 0 ] ; then
 	    echo ""
     	    # Always update the ".sync_time" date on self.
-    	    time_in_seconds > $SYNC_LOCAL_DIR/.sync_time
+    	    time_in_seconds > $local_dir/.sync_time
 	    # Sync (and hence copy the '.sync_time' file as well.
 	    if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
 		# Pass special ssh arguments to rsync.
