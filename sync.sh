@@ -103,12 +103,27 @@ export SYNC_LOCAL_DIR=
 
 # Use Python to convert seconds since the epoch to a local time date string.
 seconds_to_date () {
-    echo $(python -c "import time; print(time.ctime($1))")
+    command="import time; print(time.ctime($1))"
+    echo $(python -c "$command" || python3 -c "$command")
 }
 
 # Use Python to generate the time since the epoch in seconds.
 time_in_seconds () {
-    echo $(python -c "import time; print(int(time.time()))")
+    command="import time; print(int(time.time()))"
+    echo $(python -c "$command" || python3 -c "$command")
+}
+
+# Function for displaying the current configuration to the user.
+sync_show_configuration () {
+    echo "'sync' command configured with the following:"
+    echo ""
+    echo " SYNC_SCRIPT_PATH: "$SYNC_SCRIPT_PATH
+    echo " SYNC_SERVER:      "$SYNC_SERVER
+    echo " SYNC_SERVER_DIR:  "$SYNC_SERVER_DIR
+    echo " SYNC_LOCAL_DIR:   "$SYNC_LOCAL_DIR
+    if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
+	echo " SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
+    fi
 }
 
 # The initial setup script, this will modify the contents of this file
@@ -130,19 +145,19 @@ sync_configure () {
     echo "----------------------------------------------------------------------"
     echo "Configuring 'sync' function."
     echo ""
-    read -e -p "Full path to THIS 'sync' script (default '$default_user_script_path'): " user_script_path
+    read -e -p "Full path to THIS 'sync' script (default '$home/${default_user_script_path#$home/}'): " user_script_path
     user_script_path=${user_script_path:-$default_user_script_path}
     # Check to make sure the script file actually exists at that location.
-    while [ ! -f "$user_script_path" ] ; do
-	echo "No file exists at '$user_script_path'."
-	read -e -p "Full path to 'sync' script (default '$default_user_script_path'): " user_script_path
+    while [ ! -f "$home/${user_script_path#$home/}" ] ; do
+	echo "No file exists at '$home/${user_script_path#$home/}'."
+	read -e -p "Full path to 'sync' script (default '$home/${default_user_script_path#$home/}'): " user_script_path
 	user_script_path=${user_script_path:-$default_user_script_path}
     done
     # Read the rest of the configuration values.
     read -e -p "Server ssh identity (default '$default_user_server'): " user_server
     read -e -p "  extra ssh flags (default '$default_user_ssh_args'): " user_ssh_args
     read -e -p "Master sync dirctory on server (default '$default_user_server_dir'): " user_server_dir
-    read -e -p "Local sync dirctory (default '$default_user_local_dir'): " user_local_dir
+    read -e -p "Local sync dirctory (default '$home/${default_user_local_dir#$home/}'): " user_local_dir
     echo ""
     # Set the default values for all unprovided variables from the user.
     user_server=${user_server:-$default_user_server}
@@ -153,9 +168,12 @@ sync_configure () {
     cd $(dirname "$user_script_path") > /dev/null 2> /dev/null
     user_script_path=$(pwd)/$(basename "$user_script_path")
     cd "$start_dir" > /dev/null 2> /dev/null
+    # Convert the provided local directory into an aboslute path.
+    cd $(dirname "$user_local_dir") > /dev/null 2> /dev/null
+    user_local_dir=$(pwd)/$(basename "$user_local_dir")
+    cd "$start_dir" > /dev/null 2> /dev/null
     # Strip the trailing "/" from the provided path names.
     user_server_dir="${user_server_dir%/}"
-    user_local_dir="${user_local_dir%/}"
     # Use "sed" to edit this file to contain the user entered values.
     echo -n "Reconfiguring this sync script.. "
     # Replace this file with a configured version of itself. Each line
@@ -177,15 +195,7 @@ sync_configure () {
     source "$user_script_path"
     # Print out the configuration to the user.
     echo ""
-    echo "'sync' command configured with the following:"
-    echo ""
-    echo " SYNC_SCRIPT_PATH: "$SYNC_SCRIPT_PATH
-    echo " SYNC_SERVER:      "$SYNC_SERVER
-    echo " SYNC_SERVER_DIR:  "$SYNC_SERVER_DIR
-    echo " SYNC_LOCAL_DIR:   "$SYNC_LOCAL_DIR
-    if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-	echo " SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
-    fi
+    sync_show_configuration
     # Ask about optional extra configuration steps..
     echo ""
     read -p "Configure passwordless ssh (y/n) [n]? " user_query
@@ -233,7 +243,7 @@ sync_status () {
     # Create the "sync" directory in local in case it does not exist.
     mkdir -p $SYNC_LOCAL_DIR
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
-    { SYNC_SERVER_TIMESTAMP=$(ssh $SSH_ARGS $SYNC_SERVER "cat $SYNC_SERVER_DIR/.sync_time"); } 2> /dev/null
+    SYNC_SERVER_TIMESTAMP=$(ssh $SYNC_SSH_ARGS $SYNC_SERVER "cat $SYNC_SERVER_DIR/.sync_time 2> /dev/null || echo '0'") || return 1
     # Create a ".sync_time" file locally if it does not exist.
     if [ ! -f $SYNC_LOCAL_DIR/.sync_time ] ; then
 	# If a local sync doesn't exist, we need to set the local time
@@ -244,17 +254,6 @@ sync_status () {
     # Default value of the master timestamp is the second count "0".
     export SYNC_SERVER_TIMESTAMP=${SYNC_SERVER_TIMESTAMP:-"0"}
     export SYNC_LOCAL_TIMESTAMP=$(cat $SYNC_LOCAL_DIR/.sync_time)
-    # Print out information to the user.
-    echo ""
-    echo "'sync' command configured with the following:"
-    echo ""
-    echo " SYNC_SCRIPT_PATH: "$SYNC_SCRIPT_PATH
-    echo " SYNC_SERVER:      "$SYNC_SERVER
-    echo " SYNC_SERVER_DIR:  "$SYNC_SERVER_DIR
-    echo " SYNC_LOCAL_DIR:   "$SYNC_LOCAL_DIR
-    if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-	echo " SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
-    fi
     # Ask about optional extra configuration steps..
     echo ""
     echo "-------------------------------------------"
@@ -281,9 +280,13 @@ sync () {
     # Use the provided path, otherwise default to the local directory.
     if [ ${#relative} -gt 0 ] ; then
 	# If the user wants to reconfigure, call that script.
-	if [ "$1" == "--configure" ] ; then sync_configure ; return 0
+	if [ "$1" == "--configure" ] ; then sync_configure                        ; return 0
 	# If the user wants the status, call that script.
-	elif [ "$1" == "--status" ]  ; then sync_status    ; return 0
+	elif [ "$1" == "--status" ]  ; then
+	    sync_status
+	    sync_show_configuration
+	    echo ""
+	    return 0
 	# Otherwise assume the user provided a directory to sync.
 	# Check to make sure that directory exists, then move to it.
 	elif [ ! -d "$1" ] ; then
@@ -295,22 +298,27 @@ sync () {
 	# By default, when no parameters are provided, sync whole directory.
 	cd "$local_dir" > /dev/null 2> /dev/null
     fi
+    # Store the current directory (to be synchronized for later use).
+    sync_dir=$(pwd)
     # Call the "sync_status" function that updates the time stamps.
-    sync_status
+    cd "$start_dir" > /dev/null 2> /dev/null
+    sync_status || return 1
     # Compare the local and the master to determinex "source" and "destination".
     if [ "$SYNC_SERVER_TIMESTAMP" -gt "$SYNC_LOCAL_TIMESTAMP" ] ; then
 	# The master is newer!
-	dst=$(pwd)/
+	dst="$sync_dir/"
 	relative="${dst#$local_dir/}"
 	src=$SYNC_SERVER:$SYNC_SERVER_DIR/$relative
     else
 	# The local is newer!
-	src=$(pwd)/
+	src="$sync_dir/"
 	relative="${src#$local_dir/}"
 	dst=$SYNC_SERVER:$SYNC_SERVER_DIR/$relative
     fi
     # Create directories in master (in case the path does not exist).
-    ssh $SSH_ARGS $SYNC_SERVER "mkdir -p $SYNC_SERVER_DIR/$relative"
+    # Get the ".sync_time" time, redirect "File not found" error, it's ok.
+    ( ssh $SSH_ARGS $SYNC_SERVER "mkdir -p $SYNC_SERVER_DIR/$relative || exit 0" ) || return 1
+    cd "$sync_dir" > /dev/null 2> /dev/null
     # Make sure that we are actually in a subdirecty of "SYNC_LOCAL_DIR".
     if [ "${relative:0:1}" == "/" ] ; then
     	# Raise an error.
@@ -327,7 +335,11 @@ sync () {
     	echo ""
     	echo "rsync -az$extra_args --update --delete --progress $src $dst"
     	echo ""
+	# Wrap the asking a question into cd'ing to the start
+	# directory in case the user cancels during this operation.
+	cd "$start_dir" > /dev/null 2> /dev/null
 	read -p "Confirm (y/n) [y]? " confirm
+	cd "$sync_dir" > /dev/null 2> /dev/null
 	confirm=${confirm:-y}
 	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
 	# Only continue if the command was confirmed.
@@ -347,14 +359,14 @@ sync () {
     fi
     echo ""
     # Return to the starting directory.
-    cd $start_dir > /dev/null 2> /dev/null
+    cd "$start_dir" > /dev/null 2> /dev/null
 }
 
 # ====================================================================
 
 # Get the "home" directory using "cd"
 start_dir=$(pwd); cd > /dev/null 2> /dev/null
-home=$(pwd);      cd $start_dir > /dev/null 2> /dev/null
+home=$(pwd);      cd "$start_dir" > /dev/null 2> /dev/null
 # Execute the confirution script if this file is not configured to this machine.
 if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ] ; then
     echo ""
@@ -381,9 +393,9 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ]
 	done
 	# Convert the provided path to an absolute path.
 	start_dir=$(pwd)
-	cd $(dirname $user_script_path) > /dev/null 2> /dev/null
+	cd "$(dirname $user_script_path)" > /dev/null 2> /dev/null
 	user_script_path=$(pwd)/$(basename $user_script_path)
-	cd $start_dir > /dev/null 2> /dev/null
+	cd "$start_dir" > /dev/null 2> /dev/null
 	# Update the "export SYNC_SCRIPT_PATH" line to prevent further questioning.
 	replacement="$(echo "$user_script_path" | sed 's/[\/&]/\\&/g')"
 	sed -i.backup "s/^export SYNC_SCRIPT_PATH=.*$/export SYNC_SCRIPT_PATH=$replacement/g" $user_script_path
