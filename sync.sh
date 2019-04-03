@@ -104,13 +104,17 @@ export SYNC_LOCAL_DIR=
 # Use Python to convert seconds since the epoch to a local time date string.
 seconds_to_date () {
     command="import time; print(time.ctime($1))"
-    echo $(python -c "$command" || python3 -c "$command")
+    has_py2=$(which python)
+    if [ ${#has_py2} -gt 0 ] ; then echo $(python -c "$command") ;
+    else                             echo $(python3 -c "$command") ; fi
 }
 
 # Use Python to generate the time since the epoch in seconds.
 time_in_seconds () {
     command="import time; print(int(time.time()))"
-    echo $(python -c "$command" || python3 -c "$command")
+    has_py2=$(which python)
+    if [ ${#has_py2} -gt 0 ] ; then echo $(python -c "$command") ;
+    else                             echo $(python3 -c "$command") ; fi
 }
 
 # Function for displaying the current configuration to the user.
@@ -145,19 +149,25 @@ sync_configure () {
     echo "----------------------------------------------------------------------"
     echo "Configuring 'sync' function."
     echo ""
-    read -e -p "Full path to THIS 'sync' script (default '$home/${default_user_script_path#$home/}'): " user_script_path
+    echo -n "Full path to THIS 'sync' script (default '$home/${default_user_script_path#$home/}'): "
+    read -e user_script_path
     user_script_path=${user_script_path:-$default_user_script_path}
     # Check to make sure the script file actually exists at that location.
     while [ ! -f "$home/${user_script_path#$home/}" ] ; do
 	echo "No file exists at '$home/${user_script_path#$home/}'."
-	read -e -p "Full path to 'sync' script (default '$home/${default_user_script_path#$home/}'): " user_script_path
+	echo -n "Full path to 'sync' script (default '$home/${default_user_script_path#$home/}'): "
+	read -e user_script_path
 	user_script_path=${user_script_path:-$default_user_script_path}
     done
     # Read the rest of the configuration values.
-    read -e -p "Server ssh identity (default '$default_user_server'): " user_server
-    read -e -p "  extra ssh flags (default '$default_user_ssh_args'): " user_ssh_args
-    read -e -p "Master sync dirctory on server (default '$default_user_server_dir'): " user_server_dir
-    read -e -p "Local sync dirctory (default '$home/${default_user_local_dir#$home/}'): " user_local_dir
+    echo -n "Server ssh identity (default '$default_user_server'): "
+    read -e user_server
+    echo -n "  extra ssh flags (default '$default_user_ssh_args'): "
+    read -e user_ssh_args
+    echo -n "Master sync dirctory on server (default '$default_user_server_dir'): "
+    read -e user_server_dir
+    echo -n "Local sync dirctory (default '$home/${default_user_local_dir#$home/}'): "
+    read -e user_local_dir
     echo ""
     # Set the default values for all unprovided variables from the user.
     user_server=${user_server:-$default_user_server}
@@ -226,7 +236,8 @@ sync_configure () {
     user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
     if [ ${#user_query} -gt 0 ] ; then
 	# Ask where to put the 'source' line.
-	read -e -p "Shell initialization file (default '$home/.profile'): " user_shell_init	
+	echo -n "Shell initialization file (default '$home/.profile'): "
+	read -e user_shell_init	
 	user_shell_init=${user_shell_init:-"$home/.profile"}
 	# Make the directory if it does not exist.
 	mkdir -p "$(dirname $user_shell_init)"
@@ -414,13 +425,15 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ]
 	# If the user refuses to configure the sync script, then update
 	# the file to prevent it from asking the question again.
 	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
-	echo "To prevent further requests, provide the"
-	read -e -p " full path to the 'sync' script: " user_script_path
+	echo    "To prevent further requests, provide the"
+	echo -n " path to this 'sync' script: "
+	read -e user_script_path
 	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
 	# Check to make sure the script file actually exists at that location.
 	while [ ! -f "$user_script_path" ] ; do
 	    echo "No file exists at '$user_script_path'."
-	    read -e -p "Enter full path to 'sync' script: " user_script_path
+	    echo -n "Enter full path to 'sync' script: "
+	    read -e user_script_path
 	    user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
 	done
 	# Convert the provided path to an absolute path.
