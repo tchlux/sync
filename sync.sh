@@ -169,8 +169,9 @@ sync_configure () {
     user_script_path=$(pwd)/$(basename "$user_script_path")
     cd "$start_dir" > /dev/null 2> /dev/null
     # Convert the provided local directory into an aboslute path.
-    cd $(dirname "$user_local_dir") > /dev/null 2> /dev/null
-    user_local_dir=$(pwd)/$(basename "$user_local_dir")
+    mkdir -p "$user_local_dir" || return 1
+    cd "$user_local_dir" > /dev/null 2> /dev/null
+    user_local_dir=$(pwd)
     cd "$start_dir" > /dev/null 2> /dev/null
     # Strip the trailing "/" from the provided path names.
     user_server_dir="${user_server_dir%/}"
@@ -193,10 +194,6 @@ sync_configure () {
     echo "done."
     # Export the user variables by re-sourcing this file.
     source "$user_script_path"
-    # Make sure the "SYNC_LOCAL_DIR" exists.
-    cd > /dev/null 2> /dev/null
-    mkdir -p "$SYNC_LOCAL_DIR"
-    cd "$start_dir" > /dev/null 2> /dev/null
     # Print out the configuration to the user.
     echo ""
     sync_show_configuration
