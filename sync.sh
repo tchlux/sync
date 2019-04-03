@@ -202,7 +202,8 @@ sync_configure () {
     sync_show_configuration
     # Ask about optional extra configuration steps..
     echo ""
-    read -p "Configure passwordless ssh (y/n) [n]? " user_query
+    echo -n "Configure passwordless ssh (y/n) [n]? "
+    read user_query
     user_query=${user_query:-n}
     user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
     if [ ${#user_query} -gt 0 ] ; then
@@ -222,7 +223,8 @@ sync_configure () {
     echo ""
     echo "If you do not source this script at shell initialization"
     echo " automatically, you will have to manually source before use."
-    read -p " Add 'sync' command to shell initialization (y/n) [n]? " user_query
+    echo -n " Add 'sync' command to shell initialization (y/n) [n]? "
+    read user_query
     user_query=${user_query:-n}
     user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
     if [ ${#user_query} -gt 0 ] ; then
@@ -348,7 +350,8 @@ sync () {
     	echo ""
 	# Wrap the asking a question into cd'ing to the start
 	# directory in case the user cancels during this operation.
-	read -p "Confirm (y/n) [y]? " confirm
+	echo -n "Confirm (y/n) [y]? "
+	read confirm
 	confirm=${confirm:-y}
 	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
 	# Only continue if the command was confirmed.
@@ -365,24 +368,24 @@ sync () {
     		rsync -az --update --delete --progress $src $dst
 	    fi
 	else
-	    read -p "Swap order and sync (y/n) [n]? " confirm
+	    echo -n "Swap order and sync (y/n) [n]? "
+	    read confirm
 	    confirm=${confirm:-n}
 	    confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
 	    if [ ${#confirm} -gt 0 ] ; then
-		# Swap the variables and execute.
-		confirm="$src"
-		src="$dst"
-		dst="$confirm"
+		# Execute with swapped variables.
 		echo ""
     		# Always update the ".sync_time" date on self.
     		time_in_seconds > $local_dir/.sync_time
 		# Sync (and hence copy the '.sync_time' file as well.
 		if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
 		    # Pass special ssh arguments to rsync.
-    		    rsync -az -e "ssh $SYNC_SSH_ARGS" --update --delete --progress $src $dst
+    		    rsync -az -e "ssh $SYNC_SSH_ARGS" --update --delete --progress $dst $src
+		    # ^^ SWAPPED "src" AND "dst" ON PURPOSE
 		else
 		    # Don't pass any special ssh arguments.
-    		    rsync -az --update --delete --progress $src $dst
+    		    rsync -az --update --delete --progress $dst $src
+		    # ^^ SWAPPED "src" AND "dst" ON PURPOSE
 		fi		
 	    fi
 	    # ^ End of "Swap order?" block.
@@ -402,7 +405,8 @@ home=$(pwd);      cd "$start_dir" > /dev/null 2> /dev/null
 if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ] ; then
     echo ""
     echo "The 'sync' utility does not appear to be configured for this machine."
-    read -p "  Would you like to configure (y/n) [y]? " confirm
+    echo -n "  Would you like to configure (y/n) [y]? "
+    read confirm
     echo ""
     confirm=${confirm:-y}
     confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
