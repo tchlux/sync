@@ -60,7 +60,7 @@
 #     cd <directory to move to>
 #     mkdir -p <directory to create if it does not already exist>
 #     export <varname>=<value>
-#     read -e -p "<user input prompted with directory tab-auto-complete>"
+#     read "<user input prompted with directory tab-auto-complete>"
 #     echo "<string to output to stdout>"
 #     cat <path to file that will be printed to stdout>
 #     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
@@ -150,24 +150,24 @@ sync_configure () {
     echo "Configuring 'sync' function."
     echo ""
     echo -n "Full path to THIS 'sync' script (default '$home/${default_user_script_path#$home/}'): "
-    read -e user_script_path
+    read user_script_path
     user_script_path=${user_script_path:-$default_user_script_path}
     # Check to make sure the script file actually exists at that location.
     while [ ! -f "$home/${user_script_path#$home/}" ] ; do
 	echo "No file exists at '$home/${user_script_path#$home/}'."
 	echo -n "Full path to 'sync' script (default '$home/${default_user_script_path#$home/}'): "
-	read -e user_script_path
+	read user_script_path
 	user_script_path=${user_script_path:-$default_user_script_path}
     done
     # Read the rest of the configuration values.
     echo -n "Server ssh identity (default '$default_user_server'): "
-    read -e user_server
+    read user_server
     echo -n "  extra ssh flags (default '$default_user_ssh_args'): "
-    read -e user_ssh_args
+    read user_ssh_args
     echo -n "Master sync dirctory on server (default '$default_user_server_dir'): "
-    read -e user_server_dir
+    read user_server_dir
     echo -n "Local sync dirctory (default '$home/${default_user_local_dir#$home/}'): "
-    read -e user_local_dir
+    read user_local_dir
     echo ""
     # Set the default values for all unprovided variables from the user.
     user_server=${user_server:-$default_user_server}
@@ -237,7 +237,7 @@ sync_configure () {
     if [ ${#user_query} -gt 0 ] ; then
 	# Ask where to put the 'source' line.
 	echo -n "Shell initialization file (default '$home/.profile'): "
-	read -e user_shell_init	
+	read user_shell_init	
 	user_shell_init=${user_shell_init:-"$home/.profile"}
 	# Make the directory if it does not exist.
 	mkdir -p "$(dirname $user_shell_init)"
@@ -427,13 +427,13 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ]
 	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
 	echo    "To prevent further requests, provide the"
 	echo -n " path to this 'sync' script: "
-	read -e user_script_path
+	read user_script_path
 	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
 	# Check to make sure the script file actually exists at that location.
 	while [ ! -f "$user_script_path" ] ; do
 	    echo "No file exists at '$user_script_path'."
 	    echo -n "Enter full path to 'sync' script: "
-	    read -e user_script_path
+	    read user_script_path
 	    user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
 	done
 	# Convert the provided path to an absolute path.
