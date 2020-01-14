@@ -1,13 +1,14 @@
 # 
-#    _______________________________
-#   | AUTHOR   |  Thomas C.H. Lux   |
-#   |          |                    |
-#   | EMAIL    |  tchlux@vt.edu     |
-#   |          |                    |
-#   | VERSION  |  2019.04.02        |
-#   |          |  Basic sync script |
-#   |          |  with `sync` func. |
-#   |__________|____________________|
+#    ________________________________
+#   | AUTHOR   |  Thomas C.H. Lux    |
+#   |          |                     |
+#   | EMAIL    |  tchlux@vt.edu      |
+#   |          |                     |
+#   | VERSION  |  2020.01.14         |
+#   |          |  Basic sync script  |
+#   |          |  with bidirectional |
+#   |          |  `sync` operation.  |
+#   |__________|_____________________|
 # 
 # 
 # --------------------------------------------------------------------
@@ -17,7 +18,7 @@
 #   synchronizing a local directory with a server directory through
 #   `ssh` and `rsync`. It keeps track of a file called `.sync_time`
 #   containing the time since the Epoch in seconds to determine which
-#   repository is more recent. Then the `rsync` utility is used to
+#   files are recently modified. Then the `rsync` utility is used to
 #   transfer (and delete if appropriate) files between
 #   `$SYNC_LOCAL_DIR` and `$SYNC_SERVER:$SYNC_SERVER_DIR` using the
 #   efficient delta method of `rsync`. This can be very fast even for
@@ -26,7 +27,7 @@
 #   This tool provides a one-liner replacement for something like
 #   Dropbox or Git that can be used easily from a server with a POSIX
 #   interface, `pwd`, `export`, `cd`, `mkdir`, `read`, `echo`, `cat`,
-#    `sed`, `grep`, `rsync` and `python`.
+#    `tr`, `sed`, `grep`, `rsync`, `find`, and `python`.
 # 
 # ##  EXPECTED SHELL SYNTAX AND COMMANDS
 # 
@@ -64,6 +65,7 @@
 #     echo "<string to output to stdout>"
 #     cat <path to file that will be printed to stdout>
 #     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
+#     tr -d '\n' <file-name>
 #     grep "<regular expression>" <file to find matches>
 #     rsync -az -e "<remote shell command>" --update --delete --progress <source-patah> <destination-path>
 #     python -c "<python 2 / 3 compatible code>"
@@ -71,7 +73,7 @@
 # 
 # ## USAGE:
 # 
-#     $ sync [--status] [--configure] [path=$SYNC_LOCAL_DIR]
+#     $ sync [--status] [--configure] [--force] [--help]
 # 
 #   The `sync` command will synchronize the entire local directory if
 #   no path nor options are specified. If a path is specified, it
@@ -85,6 +87,14 @@
 #   Executing with the `--configure` option will run the initial
 #   configuration script to update the stored configuration variables
 #   expressed in the local sync script.
+# 
+#   Executing with the `--force` option will prevent the script from
+#   exiting upon discovery of local conflict files. Instead, the local
+#   files will be renamed appropriately and then synchronization will
+#   continue as normal.
+# 
+#   Executing with the `--help` option will display an abbreviated
+#   version of this documentation to standard output.
 # 
 #   A script is provided that will automatically walk you through
 #   configuration on your local machine. If this file is executed and
@@ -101,32 +111,38 @@ export SYNC_LOCAL_DIR=
 # Directories listed above should NOT have a trailing slash.
 # --------------------------------------------------------------------
 
+# Run a python command on the locally available version of Python.
+run_python_command () {
+    has_py2=$(which python)
+    if [ ${#has_py2} -gt 0 ] ; then python  -c "$1";
+    else                            python3 -c "$1"; fi
+}
+
+# Use Python to compute the difference between two numbers.
+difference () {
+    run_python_command "import sys; sys.stdout.write(str($1 - $2))"
+}
+
 # Use Python to convert seconds since the epoch to a local time date string.
 seconds_to_date () {
-    command="import time; print(time.ctime($1))"
-    has_py2=$(which python)
-    if [ ${#has_py2} -gt 0 ] ; then echo $(python -c "$command") ;
-    else                             echo $(python3 -c "$command") ; fi
+    run_python_command "import sys, time; sys.stdout.write(str(time.ctime(int($1))))"
 }
 
 # Use Python to generate the time since the epoch in seconds.
 time_in_seconds () {
-    command="import time; print(int(time.time()))"
-    has_py2=$(which python)
-    if [ ${#has_py2} -gt 0 ] ; then echo $(python -c "$command") ;
-    else                             echo $(python3 -c "$command") ; fi
+    run_python_command "import sys, time; sys.stdout.write(str(int(time.time())))"
 }
 
 # Function for displaying the current configuration to the user.
 sync_show_configuration () {
     echo "'sync' command configured with the following:"
     echo ""
-    echo " SYNC_SCRIPT_PATH: "$SYNC_SCRIPT_PATH
-    echo " SYNC_SERVER:      "$SYNC_SERVER
-    echo " SYNC_SERVER_DIR:  "$SYNC_SERVER_DIR
-    echo " SYNC_LOCAL_DIR:   "$SYNC_LOCAL_DIR
+    echo "  SYNC_SCRIPT_PATH: "$SYNC_SCRIPT_PATH
+    echo "  SYNC_SERVER:      "$SYNC_SERVER
+    echo "  SYNC_SERVER_DIR:  "$SYNC_SERVER_DIR
+    echo "  SYNC_LOCAL_DIR:   "$SYNC_LOCAL_DIR
     if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-	echo " SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
+	echo "  SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
     fi
 }
 
@@ -179,7 +195,7 @@ sync_configure () {
     user_script_path=$(pwd)/$(basename "$user_script_path")
     cd "$start_dir" > /dev/null 2> /dev/null
     # Convert the provided local directory into an aboslute path.
-    mkdir -p "$user_local_dir" || return 1
+    mkdir -p "$user_local_dir" || return 5
     cd "$user_local_dir" > /dev/null 2> /dev/null
     user_local_dir=$(pwd)
     cd "$start_dir" > /dev/null 2> /dev/null
@@ -264,7 +280,8 @@ sync_status () {
     local_dir=$(pwd)
     cd "$start_dir" > /dev/null 2> /dev/null
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
-    SYNC_SERVER_TIMESTAMP=$(ssh $SYNC_SSH_ARGS $SYNC_SERVER "cat $SYNC_SERVER_DIR/.sync_time 2> /dev/null || echo '0'") || return 1
+    SYNC_SERVER_TIMESTAMP=$(ssh $SYNC_SSH_ARGS $SYNC_SERVER "echo -n 'SYNC_TIME_IS' && ( cat $SYNC_SERVER_DIR/.sync_time 2> /dev/null || echo '' )") || return 1
+    SYNC_SERVER_TIMESTAMP=$(echo -n $SYNC_SERVER_TIMESTAMP | sed "s:^.*SYNC_TIME_IS::g")
     # Create a ".sync_time" file locally if it does not exist.
     if [ ! -f $local_dir/.sync_time ] ; then
 	# If a local sync doesn't exist, we need to set the local time
@@ -284,6 +301,25 @@ sync_status () {
     echo "Local directory last synchronization date:"
     echo "  $(seconds_to_date $SYNC_LOCAL_TIMESTAMP)"
     echo "-------------------------------------------"
+    seconds_since_sync=$(difference "$SYNC_LOCAL_TIMESTAMP" $(time_in_seconds))s
+    sync_changed_files=$(find "$local_dir" -type f -mtime $seconds_since_sync)
+    if [ ${#sync_changed_files} -gt 0 ] ; then
+	echo ""
+	# Get the number of changed files.
+	sync_changed_count=$(echo "$sync_changed_files" | wc -l)
+	sync_changed_count=$(echo $sync_changed_count)
+	if [ "$sync_changed_count" == "1" ] ; then
+	    echo "$sync_changed_count file changed or added since last sync:"
+	else
+	    echo "$sync_changed_count files changed or added since last sync:"
+	fi
+	echo ""
+	for sync_changed_file in $sync_changed_files ; do
+	    echo "  $sync_changed_file"
+	done
+	echo ""
+	echo "-------------------------------------------"
+    fi
     echo ""
 }
 
@@ -297,120 +333,115 @@ sync () {
     cd "$SYNC_LOCAL_DIR" > /dev/null 2> /dev/null
     local_dir=$(pwd)
     cd "$start_dir" > /dev/null 2> /dev/null
-    # Get the relative directory as a command line argument.
-    relative=$1
+    # Get any command line arguments.
+    arguments=$1
     # Use the provided path, otherwise default to the local directory.
-    if [ ${#relative} -gt 0 ] ; then
+    if [ ${#arguments} -gt 0 ] ; then
 	# If the user wants to reconfigure, call that script.
-	if [ "$1" == "--configure" ] ; then sync_configure                        ; return 0
+	if [ "$1" == "--configure" ] ; then sync_configure ; return 0
 	# If the user wants the status, call that script.
-	elif [ "$1" == "--status" ]  ; then
-	    sync_status
-	    sync_show_configuration
+	elif [ "$1" == "--status" ] ; then
+	    sync_status || return 1
+	    echo ""
+	    sync_show_configuration || return 2
 	    echo ""
 	    return 0
-	# Otherwise assume the user provided a directory to sync.
-	# Check to make sure that directory exists, then move to it.
-	elif [ ! -d "$1" ] ; then
-	    echo "'$1' directory does not exist."
-	    return 1
-	else cd "$1" > /dev/null 2> /dev/null
+	elif [ "$1" == "--force" ] ; then
+	    # Do nothing (this option will be used later).
+	    continue
+	else
+	    echo "The `sync` utility provides easy automatic synchronization using"
+	    echo " `rsync` and a single time file to intelligently synchronize files"
+	    echo "  between the local machine and a server. Use as:"
+	    echo ""
+	    echo " sync [--status] [--configure] [--force] [--help]"
+	    echo ""
+	    echo "where the options have the following effects:"
+	    echo "  status     -  Show the synchronization status of the server and local machine and exit."
+	    echo "  configure  -  Re-run the built-in configuration script and exit."
+	    echo "  force      -  Continue execution even with conflicts, automatically rename."
+	    echo "  help       -  Display this help message."
+	    echo ""
+	    return 0
 	fi
-    else
-	# By default, when no parameters are provided, sync whole directory.
-	cd "$local_dir" > /dev/null 2> /dev/null
     fi
-    # Store the current directory (to be synchronized for later use).
-    sync_dir=$(pwd)
     # Call the "sync_status" function that updates the time stamps.
-    cd "$start_dir" > /dev/null 2> /dev/null
     sync_status || return 1
-    # Compare the local and the master to determinex "source" and "destination".
-    if [ "$SYNC_SERVER_TIMESTAMP" -gt "$SYNC_LOCAL_TIMESTAMP" ] ; then
-	# The master is newer!
-	dst="$sync_dir/"
-	relative="${dst#$local_dir/}"
-	src=$SYNC_SERVER:$SYNC_SERVER_DIR/$relative
-    else
-	# The local is newer!
-	src="$sync_dir/"
-	relative="${src#$local_dir/}"
-	dst=$SYNC_SERVER:$SYNC_SERVER_DIR/$relative
-    fi
+    # Simplify the name of the path to the server sync directory and `rsync` command.
+    serve_dir=$SYNC_SERVER:$SYNC_SERVER_DIR
+    if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then sync_args="-e \"ssh $SYNC_SSH_ARGS\"" ; fi
     # Create directories in master (in case the path does not exist).
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
-    ( ssh $SSH_ARGS $SYNC_SERVER "mkdir -p $SYNC_SERVER_DIR/$relative || exit 0" ) || return 1
-    # Make sure that we are actually in a subdirecty of "SYNC_LOCAL_DIR".
-    if [ "${relative:0:1}" == "/" ] ; then
-    	# Raise an error.
-    	echo "ERROR: Must specify (a subset of) '$local_dir' to sync."
-	echo "  $relative"
-    else
-	extra_args=""
-	if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-	    extra_args=" -e \"ssh $SYNC_SSH_ARGS\""
-	fi
-    	# Execute the command.
-    	echo "Sync from: $src"
-    	echo " --> to:   $dst"
-    	echo ""
-    	echo "rsync -az$extra_args --update --delete --progress $src $dst"
-    	echo ""
-	# Wrap the asking a question into cd'ing to the start
-	# directory in case the user cancels during this operation.
-	echo -n "Confirm (y/n) [y]? "
-	read confirm
-	confirm=${confirm:-y}
-	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
-	# Only continue if the command was confirmed.
-	if [ ${#confirm} -gt 0 ] ; then
-	    echo ""
-    	    # Always update the ".sync_time" date on self.
-    	    time_in_seconds > $local_dir/.sync_time
-	    # Sync (and hence copy the '.sync_time' file as well.
-	    if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-		# Pass special ssh arguments to rsync.
-    		rsync -az -e "ssh $SYNC_SSH_ARGS" --update --delete --progress $src $dst
-	    else
-		# Don't pass any special ssh arguments.
-    		rsync -az --update --delete --progress $src $dst
-	    fi
-	else
-	    echo -n "Swap order and sync (y/n) [n]? "
-	    read confirm
-	    confirm=${confirm:-n}
-	    confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
-	    if [ ${#confirm} -gt 0 ] ; then
-		# Execute with swapped variables.
+    ( ssh $SSH_ARGS $SYNC_SERVER "mkdir -p $SYNC_SERVER_DIR" > /dev/null ) || return 3
+    # Declare some file names to use in this process.
+    sync_files=".sync_files_to_transfer_$(hostname)"
+    # Find all server files that are newer than this sync time (relative paths only).
+    server_find_cmd="find \"$SYNC_SERVER_DIR\" -type f -mtime $seconds_since_sync | sed \"s:^$SYNC_SERVER_DIR/::g\""
+    ( ssh $SSH_ARGS $SYNC_SERVER "$server_find_cmd" > "$local_dir/$sync_files" ) || return 3
+    # Cycle through local files that have been modified, if they are also
+    # modified on the server, then reassign their name to have a conflict
+    # string at the end of the name. find "\0" uses null seperator, grep 
+    # "-z" looks for null seperators in inputs, grep "-f" reads inputs 
+    # from files, xargs "-0" uses null seperator.
+    conflict_files=$(find "$local_dir" -type f -mtime $seconds_since_sync \
+			 | sed "s:^$local_dir/::g" \
+			 | grep -Ff "$local_dir/$sync_files")
+    if [ ${#conflict_files} -gt 0 ] ; then
+	if [ "$1" == "--force" ] ; then
+	    suffix="SYNC_CONFLICT_[$(hostname)]_($(date | sed 's/:/-/g' | sed 's/ /_/g'))"
+	    for conflict_file in $conflict_files ; do
+		echo "  renaming conflict:"
+		echo "    $local_dir/$conflict_file"
+		echo "    $local_dir/$conflict_file""_""$suffix"
+		mv "$local_dir/$conflict_file" "$local_dir/$conflict_file""_""$suffix"
 		echo ""
-    		# Always update the ".sync_time" date on self.
-    		time_in_seconds > $local_dir/.sync_time
-		# Sync (and hence copy the '.sync_time' file as well.
-		if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-		    # Pass special ssh arguments to rsync.
-    		    rsync -az -e "ssh $SYNC_SSH_ARGS" --update --delete --progress $dst $src
-		    # ^^ SWAPPED "src" AND "dst" ON PURPOSE
-		else
-		    # Don't pass any special ssh arguments.
-    		    rsync -az --update --delete --progress $dst $src
-		    # ^^ SWAPPED "src" AND "dst" ON PURPOSE
-		fi		
-	    fi
-	    # ^ End of "Swap order?" block.
+	    done
+	else
+	    echo "ERROR: Found conflicting local files. Either rename files or use"
+	    echo "       the '--force' option to automatically rename files."
+	    echo ""
+	    for conflict_file in $conflict_files ; do
+		echo "  $local_dir/$conflict_file"
+	    done
+	    echo ""
+	    # Remove the file that was created to list the new server files.
+	    rm -f "$local_dir/$sync_files"
+	    return 4
 	fi
-	# ^ End of "Confirm sync?" block.
     fi
-    # ^ End of "Is valid path to synchronize?" block.
+    # Update the list of local files that were created since the last sync.
+    find $local_dir -type f -mtime $seconds_since_sync \
+	| sed "s:$local_dir/::g" | sed "s:$sync_files::g" | \
+	tr -d '\n' > $local_dir/$sync_files
+    echo " LOCAL --> SERVER"
     echo ""
+    # Send all new files from this local machine to the server.
+    rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files" "$local_dir" "$serve_dir"
+    # Remove the temporary file used for synchronizing the files.
+    rm -f "$local_dir/$sync_files"
+    echo ""
+    echo "-------------------------------------------"
+    echo ""
+    echo " LOCAL <-- SERVER"
+    echo ""
+    # Sync all files from the server down (including deletions).
+    rsync $sync_args -az --update --progress --delete "$serve_dir/" "$local_dir"
+    echo ""
+    echo "-------------------------------------------"
+    # Sync the ".sync_time" file up and execute all local deletions on server.
+    time_in_seconds > "$local_dir/.sync_time"
+    rsync $sync_args -a --delete "$local_dir/" "$serve_dir"
 }
 
 # ====================================================================
 
 # Get the "home" directory using "cd"
-start_dir=$(pwd); cd > /dev/null 2> /dev/null
-home=$(pwd);      cd "$start_dir" > /dev/null 2> /dev/null
+sync_start_dir=$(pwd); cd > /dev/null 2> /dev/null
+sync_home=$(pwd);      cd "$sync_start_dir" > /dev/null 2> /dev/null
+# Remove the extra 'start_dir' variable from the shell.
+unset sync_start_dir
 # Execute the confirution script if this file is not configured to this machine.
-if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ] ; then
+if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$sync_home/${SYNC_SCRIPT_PATH#$sync_home/}" ] ; then
     echo ""
     echo "The 'sync' utility does not appear to be configured for this machine."
     echo -n "  Would you like to configure (y/n) [y]? "
@@ -448,3 +479,5 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$home/${SYNC_SCRIPT_PATH#$home/}" ]
 	echo ""
     fi
 fi
+# Remove the extra 'home' variable from the shell.
+unset sync_home

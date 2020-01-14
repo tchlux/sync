@@ -19,7 +19,7 @@
   synchronizing a local directory with a server directory through
   `ssh` and `rsync`. It keeps track of a file called `.sync_time`
   containing the time since the Epoch in seconds to determine which
-  repository is more recent. Then the `rsync` utility is used to
+  files are recently modified. Then the `rsync` utility is used to
   transfer (and delete if appropriate) files between
   `$SYNC_LOCAL_DIR` and `$SYNC_SERVER:$SYNC_SERVER_DIR` using the
   efficient delta method of `rsync`. This can be very fast even for
@@ -28,7 +28,7 @@
   This tool provides a one-liner replacement for something like
   Dropbox or Git that can be used easily from a server with a POSIX
   interface, `pwd`, `export`, `cd`, `mkdir`, `read`, `echo`, `cat`,
-   `sed`, `grep`, `rsync` and `python`.
+   `tr`, `sed`, `grep`, `rsync`, `find`, and `python`.
 
 ##  EXPECTED SHELL SYNTAX AND COMMANDS
 
@@ -62,10 +62,11 @@
     cd <directory to move to>
     mkdir -p <directory to create if it does not already exist>
     export <varname>=<value>
-    read -e -p "<user input prompted with directory tab-auto-complete>"
+    read "<user input prompted with directory tab-auto-complete>"
     echo "<string to output to stdout>"
     cat <path to file that will be printed to stdout>
     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
+    tr -d '\n' <file-name>
     grep "<regular expression>" <file to find matches>
     rsync -az -e "<remote shell command>" --update --delete --progress <source-patah> <destination-path>
     python -c "<python 2 / 3 compatible code>"
@@ -73,7 +74,7 @@
 
 ## USAGE:
 
-    $ sync [--status] [--configure] [path=$SYNC_LOCAL_DIR]
+    $ sync [--status] [--configure] [--force] [--help]
 
   The `sync` command will synchronize the entire local directory if
   no path nor options are specified. If a path is specified, it
@@ -88,13 +89,16 @@
   configuration script to update the stored configuration variables
   expressed in the local sync script.
 
+  Executing with the `--force` option will prevent the script from
+  exiting upon discovery of local conflict files. Instead, the local
+  files will be renamed appropriately and then synchronization will
+  continue as normal.
+
+  Executing with the `--help` option will display an abbreviated
+  version of this documentation to standard output.
+
   A script is provided that will automatically walk you through
   configuration on your local machine. If this file is executed and
   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
   prompt to automatically (re)configure will appear.
 
-
-## PLANNED MODIFICATIONS
-
-- [ ] Automatically pick a different .*profile file if it exists in
-      the user home directory. Current default is always `.profile`.
