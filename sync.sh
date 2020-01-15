@@ -67,13 +67,13 @@
 #     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
 #     tr -d '\n' <file-name>
 #     grep "<regular expression>" <file to find matches>
-#     rsync -az -e "<remote shell command>" --update --delete --progress <source-patah> <destination-path>
+#     rsync -az -e "<remote shell command>" --update --delete --progress --existing --ignore-existing <source-path> <destination-path>
 #     python -c "<python 2 / 3 compatible code>"
 # 
 # 
 # ## USAGE:
 # 
-#     $ sync [--status] [--configure] [--force] [--help]
+#     $ sync [--status] [--configure] [--rename] [--help]
 # 
 #   The `sync` command will synchronize the entire local directory if
 #   no path nor options are specified. If a path is specified, it
@@ -88,7 +88,7 @@
 #   configuration script to update the stored configuration variables
 #   expressed in the local sync script.
 # 
-#   Executing with the `--force` option will prevent the script from
+#   Executing with the `--rename` option will prevent the script from
 #   exiting upon discovery of local conflict files. Instead, the local
 #   files will be renamed appropriately and then synchronization will
 #   continue as normal.
@@ -346,20 +346,19 @@ sync () {
 	    sync_show_configuration || return 2
 	    echo ""
 	    return 0
-	elif [ "$1" == "--force" ] ; then
-	    # Do nothing (this option will be used later).
-	    continue
+	# Do nothing (these option will be used later).
+	elif [ "$1" == "--rename" ] ; then continue
 	else
 	    echo "The `sync` utility provides easy automatic synchronization using"
 	    echo " `rsync` and a single time file to intelligently synchronize files"
 	    echo "  between the local machine and a server. Use as:"
 	    echo ""
-	    echo " sync [--status] [--configure] [--force] [--help]"
+	    echo " sync [--status] [--configure] [--rename] [--help]"
 	    echo ""
 	    echo "where the options have the following effects:"
 	    echo "  status     -  Show the synchronization status of the server and local machine and exit."
 	    echo "  configure  -  Re-run the built-in configuration script and exit."
-	    echo "  force      -  Continue execution even with conflicts, automatically rename."
+	    echo "  rename     -  Continue execution even with conflicts, automatically rename."
 	    echo "  help       -  Display this help message."
 	    echo ""
 	    return 0
@@ -374,10 +373,10 @@ sync () {
     # Get the ".sync_time" time, redirect "File not found" error, it's ok.
     ( ssh $SSH_ARGS $SYNC_SERVER "mkdir -p $SYNC_SERVER_DIR" > /dev/null ) || return 3
     # Declare some file names to use in this process.
-    sync_files=".sync_files_to_transfer_$(hostname)"
+    sync_files_serve=".sync_files_$(hostname)_transfer_from_serve"
     # Find all server files that are newer than this sync time (relative paths only).
     server_find_cmd="find \"$SYNC_SERVER_DIR\" -type f -mtime $seconds_since_sync | sed \"s:^$SYNC_SERVER_DIR/::g\""
-    ( ssh $SSH_ARGS $SYNC_SERVER "$server_find_cmd" > "$local_dir/$sync_files" ) || return 3
+    ( ssh $SSH_ARGS $SYNC_SERVER "$server_find_cmd" > "$local_dir/$sync_files_serve" ) || return 3
     # Cycle through local files that have been modified, if they are also
     # modified on the server, then reassign their name to have a conflict
     # string at the end of the name. find "\0" uses null seperator, grep 
@@ -385,9 +384,9 @@ sync () {
     # from files, xargs "-0" uses null seperator.
     conflict_files=$(find "$local_dir" -type f -mtime $seconds_since_sync \
 			 | sed "s:^$local_dir/::g" \
-			 | grep -Ff "$local_dir/$sync_files")
+			 | grep -Ff "$local_dir/$sync_files_serve")
     if [ ${#conflict_files} -gt 0 ] ; then
-	if [ "$1" == "--force" ] ; then
+	if [ "$1" == "--rename" ] ; then
 	    suffix="SYNC_CONFLICT_[$(hostname)]_($(date | sed 's/:/-/g' | sed 's/ /_/g'))"
 	    for conflict_file in $conflict_files ; do
 		echo "  renaming conflict:"
@@ -398,39 +397,48 @@ sync () {
 	    done
 	else
 	    echo "ERROR: Found conflicting local files. Either rename files or use"
-	    echo "       the '--force' option to automatically rename files."
+	    echo "       the '--rename' option to automatically rename files."
 	    echo ""
 	    for conflict_file in $conflict_files ; do
 		echo "  $local_dir/$conflict_file"
 	    done
 	    echo ""
 	    # Remove the file that was created to list the new server files.
-	    rm -f "$local_dir/$sync_files"
+	    rm -f "$local_dir/$sync_files_serve"
 	    return 4
 	fi
     fi
-    # Update the list of local files that were created since the last sync.
-    find $local_dir -type f -mtime $seconds_since_sync \
-	| sed "s:$local_dir/::g" | sed "s:$sync_files::g" | \
-	tr -d '\n' > $local_dir/$sync_files
-    echo " LOCAL --> SERVER"
-    echo ""
-    # Send all new files from this local machine to the server.
-    rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files" "$local_dir" "$serve_dir"
-    # Remove the temporary file used for synchronizing the files.
-    rm -f "$local_dir/$sync_files"
-    echo ""
-    echo "-------------------------------------------"
-    echo ""
+    # Identify which files on this machine were created since the last sync.
+    sync_files_local=".sync_files_$(hostname)_transfer_from_local"
+    ( find $local_dir -type f -mtime $seconds_since_sync \
+	  | sed "s:$local_dir/::g" \
+	  | sed "s:$sync_files_local::g" \
+	  | sed "s:$sync_files_serve::g" \
+	  | tr -d '\n' > $local_dir/$sync_files_local ) || return 6
+    # 
+    #     -------------------------------------------
+    # 
     echo " LOCAL <-- SERVER"
     echo ""
-    # Sync all files from the server down (including deletions).
-    rsync $sync_args -az --update --progress --delete "$serve_dir/" "$local_dir"
+    # Sync all new files from the server to the local.
+    ( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_serve" "$serve_dir" "$local_dir" ) || return 7
     echo ""
     echo "-------------------------------------------"
-    # Sync the ".sync_time" file up and execute all local deletions on server.
+    echo ""
+    echo " LOCAL --> SERVER"
+    echo ""
+    # Sync all new files from this local machine to the server.
+    ( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_local" "$local_dir" "$serve_dir" ) || return 7
+    # Remove the temporary files used for synchronizing.
+    rm -f "$local_dir/$sync_files_local" "$local_dir/$sync_files_serve"
+    echo ""
+    echo "-------------------------------------------"
+    echo ""
+    # Delete the local files that are gone from the server.
+    ( rsync $sync_args -a --existing --ignore-existing --delete "$serve_dir/" "$local_dir" ) || return 7
+    # Sync the ".sync_time" file and execute local deletions on server.
     time_in_seconds > "$local_dir/.sync_time"
-    rsync $sync_args -a --delete "$local_dir/" "$serve_dir"
+    ( rsync $sync_args -a --delete "$local_dir/" "$serve_dir" ) || return 7
 }
 
 # ====================================================================

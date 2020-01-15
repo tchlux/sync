@@ -68,13 +68,13 @@
     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
     tr -d '\n' <file-name>
     grep "<regular expression>" <file to find matches>
-    rsync -az -e "<remote shell command>" --update --delete --progress <source-patah> <destination-path>
+    rsync -az -e "<remote shell command>" --update --delete --progress --existing --ignore-existing <source-path> <destination-path>
     python -c "<python 2 / 3 compatible code>"
 
 
 ## USAGE:
 
-    $ sync [--status] [--configure] [--force] [--help]
+    $ sync [--status] [--configure] [--rename] [--help]
 
   The `sync` command will synchronize the entire local directory if
   no path nor options are specified. If a path is specified, it
@@ -89,7 +89,7 @@
   configuration script to update the stored configuration variables
   expressed in the local sync script.
 
-  Executing with the `--force` option will prevent the script from
+  Executing with the `--rename` option will prevent the script from
   exiting upon discovery of local conflict files. Instead, the local
   files will be renamed appropriately and then synchronization will
   continue as normal.
@@ -101,4 +101,3 @@
   configuration on your local machine. If this file is executed and
   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
   prompt to automatically (re)configure will appear.
-
