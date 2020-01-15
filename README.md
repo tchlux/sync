@@ -27,9 +27,11 @@
 
   This tool provides a one-liner replacement for something like
   Dropbox or Git that can be used easily from a server with a POSIX
-  compliant shell with the commands `pwd`, `export`, `cd`, `mkdir`,
-  `read`, `echo`, `cat`, `wc`, `sed`, `grep`, `rsync`, `typeset`,
-  and `python` (or `python3`).
+  compliant shell with the commands `whoami`, `hostname`, `pwd`,
+  `cd`, `rm`, `mkdir`, `dirname`, `basename`, `which`, `source`,
+  `export`, `read`, `echo`, `typeset`, `cat`, `wc`, `sed`, `grep`, 
+  `ssh`, `ssh-keygen`, `ssh-copy-id`, `rsync`, and `python` (or
+  `python3`).
 
 ##  EXPECTED SHELL SYNTAX AND COMMANDS
 
@@ -51,20 +53,23 @@
 
     func () { <body of function that takes arguments as $1 ...> }
     while <loop condition> ; do <body commands> ; done
-    for <var name> in $<variable> ; do <body commands> ; done
     if <condition> ; then <true body> ; elif <condition> ; then <true body> ; else <false body> ; fi
 
   Along with the standard POSIX expectations above, the following
   commands are used by this program with the demonstrated syntax.
 
-    cd <directory to move to>
-    rm <path to file to remove>
-    mkdir -p <directory to create if it does not already exist>
+    whoami (no arguments / prints the current user name)
+    hostname (no arguments / prints name of machine)
     pwd (no arguments / prints full path to present working directory)
+    cd <directory to move to>
+    rm -f <path to file to remove>
+    mkdir -p <directory to create if it does not already exist>
     dirname <path to get only directory name>
     basename <path to get only file name>
+    which <name of executable to return full path to>
+    source <path to shell file to run>
     export <varname>=<value>
-    read "<user input prompted with directory tab-auto-complete>"
+    read <variable> (user input prompted with directory tab-auto-complete)
     echo "<string to output to stdout>"
     typeset -f "<name of shell function>"
     cat <path to file that will be printed to stdout>
@@ -73,6 +78,9 @@
     grep "<regular expression>" <file to find matches>
     rsync -az -e "<remote shell command>" --update --delete --progress --existing --ignore-existing --dry-run <source-path> <destination-path>
     python -c "<python 2 / 3 compatible code>"
+    ssh <server-name> "command" (opens a secure shell to server and runs command)
+    ssh-keygen (generates an ssh remote login key if it doesn't exist)
+    ssh-copy-id <server-name> (exchanges ssh authorizations with server)
 
 
 ## USAGE:
@@ -104,3 +112,11 @@
   configuration on your local host. If this file is executed and
   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
   prompt to automatically (re)configure will appear.
+
+## WARNINGS:
+
+  In some cases, symbolic links will show a modification time that 
+  makes them *always* synchronize. This can cause chaos, so for now
+  if you see this happenn then delete that file. Please consider
+  submitting an `Issue` in the repository with a minimum working
+  example and I will fix it as soon as possible.

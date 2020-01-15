@@ -26,9 +26,11 @@
 # 
 #   This tool provides a one-liner replacement for something like
 #   Dropbox or Git that can be used easily from a server with a POSIX
-#   compliant shell with the commands `pwd`, `export`, `cd`, `mkdir`,
-#   `read`, `echo`, `cat`, `wc`, `sed`, `grep`, `rsync`, `typeset`,
-#   and `python` (or `python3`).
+#   compliant shell with the commands `whoami`, `hostname`, `pwd`,
+#   `cd`, `rm`, `mkdir`, `dirname`, `basename`, `which`, `source`,
+#   `export`, `read`, `echo`, `typeset`, `cat`, `wc`, `sed`, `grep`, 
+#   `ssh`, `ssh-keygen`, `ssh-copy-id`, `rsync`, and `python` (or
+#   `python3`).
 # 
 # ##  EXPECTED SHELL SYNTAX AND COMMANDS
 # 
@@ -50,20 +52,23 @@
 # 
 #     func () { <body of function that takes arguments as $1 ...> }
 #     while <loop condition> ; do <body commands> ; done
-#     for <var name> in $<variable> ; do <body commands> ; done
 #     if <condition> ; then <true body> ; elif <condition> ; then <true body> ; else <false body> ; fi
 # 
 #   Along with the standard POSIX expectations above, the following
 #   commands are used by this program with the demonstrated syntax.
 # 
-#     cd <directory to move to>
-#     rm <path to file to remove>
-#     mkdir -p <directory to create if it does not already exist>
+#     whoami (no arguments / prints the current user name)
+#     hostname (no arguments / prints name of machine)
 #     pwd (no arguments / prints full path to present working directory)
+#     cd <directory to move to>
+#     rm -f <path to file to remove>
+#     mkdir -p <directory to create if it does not already exist>
 #     dirname <path to get only directory name>
 #     basename <path to get only file name>
+#     which <name of executable to return full path to>
+#     source <path to shell file to run>
 #     export <varname>=<value>
-#     read "<user input prompted with directory tab-auto-complete>"
+#     read <variable> (user input prompted with directory tab-auto-complete)
 #     echo "<string to output to stdout>"
 #     typeset -f "<name of shell function>"
 #     cat <path to file that will be printed to stdout>
@@ -72,6 +77,9 @@
 #     grep "<regular expression>" <file to find matches>
 #     rsync -az -e "<remote shell command>" --update --delete --progress --existing --ignore-existing --dry-run <source-path> <destination-path>
 #     python -c "<python 2 / 3 compatible code>"
+#     ssh <server-name> "command" (opens a secure shell to server and runs command)
+#     ssh-keygen (generates an ssh remote login key if it doesn't exist)
+#     ssh-copy-id <server-name> (exchanges ssh authorizations with server)
 # 
 # 
 # ## USAGE:
@@ -104,6 +112,14 @@
 #   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
 #   prompt to automatically (re)configure will appear.
 # 
+# ## WARNINGS:
+# 
+#   In some cases, symbolic links will show a modification time that 
+#   makes them *always* synchronize. This can cause chaos, so for now
+#   if you see this happenn then delete that file. Please consider
+#   submitting an `Issue` in the repository with a minimum working
+#   example and I will fix it as soon as possible.
+# 
 # CONFIGURATION VARIABLES FOR "SYNC" OPERATION.
 #
 export SYNC_SCRIPT_PATH=
@@ -120,7 +136,14 @@ export SYNC_LOCAL_DIR=
 # `start` seconds (since epoch) minus the "mtime" (seconds since epoch) 
 # of individual files.
 find_mtime_seconds () {
-    $(which python || which python3) -c "import sys, os; [sys.stdout.write(os.path.abspath(os.path.join(d,p))+\"\\n\") for (d,_,ps) in os.walk(\"$1\") for p in ps if $2 - os.path.getmtime(os.path.join(d,p)) < $3]"
+    $(which python || which python3) -c "import sys, os; [sys.stdout.write(os.path.abspath(os.path.join(d,p))+\"\\n\") for (d,_,ps) in os.walk(os.path.abspath(\"$1\")) for p in ps if (os.path.exists(os.path.join(d,p)) and $2 - os.path.getmtime(os.path.join(d,p))) < $3]"
+}
+
+# Given a `prefix`, read standard input as a file, but add `prefix`
+# before every line. Uses `python` to achieve this.
+with_line_prefix () {
+    $(which python || which python3) -c "import sys; sys.stdout.write(\"$1\"+(\"\\n\"+\"$1\").join([l.rstrip(\"\\n\") for l in sys.stdin.readlines()]))"
+    echo ""
 }
 
 # Use Python to compute the difference between two numbers (supports floats).
@@ -312,18 +335,20 @@ sync_status () {
     export SYNC_LOCAL_TIMESTAMP=$(cat $local_dir/.sync_time)
     # Ask about optional extra configuration steps..
     echo ""
-    echo "-------------------------------------------"
+    echo "___________________________________________"
+    echo ""
     echo "Server directory last synchronization date:"
     echo "  $(seconds_to_date $SYNC_SERVER_TIMESTAMP)"
     echo ""
     echo "Local directory last synchronization date:"
     echo "  $(seconds_to_date $SYNC_LOCAL_TIMESTAMP)"
-    echo "-------------------------------------------"
+    echo "___________________________________________"
     current_time=$(time_in_seconds)
     seconds_since_local_sync=$(difference $current_time "$SYNC_LOCAL_TIMESTAMP" )
     seconds_since_serve_sync=$(difference $current_time "$SYNC_SERVER_TIMESTAMP")
     seconds_since_sync=$(maximum $seconds_since_local_sync $seconds_since_serve_sync)
-    sync_changed_files=$(find_mtime_seconds "$local_dir" $current_time $seconds_since_sync | ( grep -v "$local_dir/\.sync_time" || echo "" ))
+    # Find all the local files, ignore the ".sync_time" file, and remove leading characters.
+    sync_changed_files=$(find_mtime_seconds "$local_dir" $current_time $seconds_since_sync | grep -v "$local_dir/\.sync_time" | sed "s:^.*$local_dir:$local_dir:g")
     if [ ${#sync_changed_files} -gt 0 ] ; then
 	echo ""
 	# Get the number of changed files.
@@ -335,9 +360,7 @@ sync_status () {
 	    echo "$sync_changed_count files changed or added since last sync:"
 	fi
 	echo ""
-	for sync_changed_file in "$sync_changed_files" ; do
-	    echo "  $sync_changed_file"
-	done
+	echo "$sync_changed_files" | with_line_prefix "  "
 	echo ""
 	echo "-------------------------------------------"
     fi
@@ -362,10 +385,9 @@ sync () {
 	if [ "$1" == "--configure" ] ; then sync_configure ; return 0
 	# If the user wants the status, call that script.
 	elif [ "$1" == "--status" ] ; then
-	    sync_status || return 1
 	    echo ""
 	    sync_show_configuration || return 2
-	    echo ""
+	    sync_status || return 1
 	    return 0
 	# Do nothing (these option will be used later).
 	elif [ "$1" == "--rename" ] ; then continue
@@ -396,36 +418,35 @@ sync () {
     # Declare some file names to use in this process.
     sync_files_serve=".sync_files_$(hostname)_transfer_from_server"
     # Find all server files that are newer than this sync time (relative paths only, exclude ".sync_time" file).
-    server_find_command="$(typeset -f find_mtime_seconds); find_mtime_seconds \"$SYNC_SERVER_DIR\" $current_time $seconds_since_sync | sed \"s:.*$SYNC_SERVER_DIR/::g\" | ( grep -v \"\.sync_time\" || echo \"\" )"
+    server_find_command="$(typeset -f find_mtime_seconds); find_mtime_seconds \"$SYNC_SERVER_DIR\" $current_time $seconds_since_sync | sed \"s:.*$SYNC_SERVER_DIR/::g\" | ( grep -v \"\.sync_time\" || echo '' )"
     ( ssh $SSH_ARGS $SYNC_SERVER "$server_find_command" > "$local_dir/$sync_files_serve" ) || return 3
     # Cycle through local files that have been modified, if they are also
     # modified on the server, then reassign their name to have a conflict
     # string at the end of the name.
     if [ $(count_nonempty_lines "$local_dir/$sync_files_serve") -gt 0 ] ; then
+	echo "$sync_changed_files"
 	conflict_files=$(echo "$sync_changed_files" \
 			     | sed "s:^$local_dir/::g" \
 			     | grep -Ff "$local_dir/$sync_files_serve")
+    else
+	unset conflict_files
     fi
     # If there are conflicting files, then handle appropriately.
     if [ ${#conflict_files} -gt 0 ] ; then
 	# If "--rename" was specified, automatically rename the conflicts.
 	if [ "$1" == "--rename" ] ; then
 	    suffix="SYNC_CONFLICT_[$(hostname)]_($(date | sed 's/:/-/g' | sed 's/ /_/g'))"
-	    for conflict_file in $conflict_files ; do
-		echo "  renaming conflict:"
-		echo "    $local_dir/$conflict_file"
-		echo "    $local_dir/$conflict_file""_""$suffix"
+	    echo "$conflict_files" | with_line_prefix "  making file: "
+	    echo ""
+	    while IFS= read -r conflict_file; do
 		mv "$local_dir/$conflict_file" "$local_dir/$conflict_file""_""$suffix"
-		echo ""
-	    done
+	    done <<< "$conflict_files"
 	# If "--rename" was not specified, raise an error.
 	else
 	    echo "ERROR: Found conflicting local files. Either rename files or use"
 	    echo "       the '--rename' option to automatically rename files."
 	    echo ""
-	    for conflict_file in $conflict_files ; do
-		echo "  $local_dir/$conflict_file"
-	    done
+	    echo "$conflict_files" | with_line_prefix "  $local_dir/"
 	    echo ""
 	    # Remove the file that was created to list the new server files.
 	    rm -f "$local_dir/$sync_files_serve"
@@ -450,28 +471,29 @@ sync () {
 	echo "-------------------------------------------"
 	echo ""
     fi
+    # Overwrite the ".sync_time" file, because a synchronization has
+    # happened and if a failure occurs after this commit to server,
+    # that should be recorded.
+    echo "$current_time" > "$local_dir/.sync_time"
+    echo ".sync_time" >> $local_dir/$sync_files_local
     # Show a message about what is being `sync`ed up (always at leaast one file).
-    if [ $(count_nonempty_lines "$local_dir/$sync_files_local") -gt 0 ] ; then
-	echo " LOCAL --> SERVER"
-	echo ""
-	# Sync all new files from this local host to the server.
-	( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_local" "$local_dir" "$serve_dir" ) || return 8
-	echo ""
-	echo "-------------------------------------------"
-	echo ""
-    fi
+    echo " LOCAL --> SERVER"
+    echo ""
+    # Sync all new files from this local host to the server.
+    ( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_local" "$local_dir" "$serve_dir" ) || return 8
+    echo ""
+    echo "-------------------------------------------"
+    echo ""
     # Remove the temporary files used for synchronizing.
     rm -f "$local_dir/$sync_files_local" "$local_dir/$sync_files_serve"
     # Delete the local files that are gone from the server.
     delete_output=$( rsync $sync_args -a --progress --existing --ignore-existing --delete --dry-run "$serve_dir/" "$local_dir" ) || return 9
     # Print any outputs that describe a deletion on the local host.
-    delete_output=$(echo "$delete_output" | sed 's:^.*deleting:deleting:g' | grep "deleting" | sed 's:^deleting ::g')
+    delete_output=$(echo "$delete_output" | sed 's:^.*deleting:deleting:g' | grep 'deleting' | sed 's:^deleting ::g')
     if [ ${#delete_output} -gt 0 ] ; then
 	echo " LOCAL DELETIONS"
 	echo ""
-	for delete_file in "$delete_output" ; do
-	    echo "  $local_dir/$delete_file"
-	done
+	echo "$delete_output" | with_line_prefix "  $local_dir/"
 	echo ""
 	echo -n " Would you like to permantly delete all listed? (y/n) [y]? "
 	read confirm
@@ -486,16 +508,13 @@ sync () {
 	echo ""
     fi
     # Sync the ".sync_time" file and execute local deletions on server.
-    echo "$current_time" > "$local_dir/.sync_time"
     delete_output=$( rsync $sync_args -a --progress --delete --dry-run "$local_dir/" "$serve_dir" ) || return 11
     # Print any outputs that describe a deletion on the server.
     delete_output=$(echo "$delete_output" | sed 's:^.*deleting:deleting:g' | grep "deleting" | sed 's:^deleting ::g')
     if [ ${#delete_output} -gt 0 ] ; then
 	echo " SERVER DELETIONS"
 	echo ""
-	for delete_file in "$delete_output" ; do
-	    echo "  $SYNC_SERVER_DIR/$delete_file"
-	done
+	echo "$delete_output" | with_line_prefix "  $SYNC_SERVER_DIR/"
 	echo ""
 	echo -n " Would you like to permantly delete all listed? (y/n) [y]? "
 	read confirm
@@ -503,11 +522,14 @@ sync () {
 	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
 	# Only continue with the deletion if it was confirmed.
 	if [ ${#confirm} -gt 0 ] ; then
-	    rsync $sync_args -a --delete --dry-run "$local_dir/" "$serve_dir" || return 12
+	    rsync $sync_args -a --delete "$local_dir/" "$serve_dir" || return 12
 	fi
 	echo ""
 	echo "-------------------------------------------"
 	echo ""
+    else
+	# We have to send over the ".sync_time" file regardless.
+	rsync $sync_args -a "$local_dir/.sync_time" "$serve_dir/" || return 13
     fi
     # End of successful execution.
     return 0
