@@ -27,8 +27,9 @@
 
   This tool provides a one-liner replacement for something like
   Dropbox or Git that can be used easily from a server with a POSIX
-  interface, `pwd`, `export`, `cd`, `mkdir`, `read`, `echo`, `cat`,
-   `tr`, `sed`, `grep`, `rsync`, `find`, and `python`.
+  compliant shell with the commands `pwd`, `export`, `cd`, `mkdir`,
+  `read`, `echo`, `cat`, `wc`, `sed`, `grep`, `rsync`, `typeset`,
+  and `python` (or `python3`).
 
 ##  EXPECTED SHELL SYNTAX AND COMMANDS
 
@@ -50,25 +51,27 @@
 
     func () { <body of function that takes arguments as $1 ...> }
     while <loop condition> ; do <body commands> ; done
+    for <var name> in $<variable> ; do <body commands> ; done
     if <condition> ; then <true body> ; elif <condition> ; then <true body> ; else <false body> ; fi
 
   Along with the standard POSIX expectations above, the following
   commands are used by this program with the demonstrated syntax.
 
+    cd <directory to move to>
+    rm <path to file to remove>
+    mkdir -p <directory to create if it does not already exist>
     pwd (no arguments / prints full path to present working directory)
     dirname <path to get only directory name>
     basename <path to get only file name>
-    rm <path to file to remove>
-    cd <directory to move to>
-    mkdir -p <directory to create if it does not already exist>
     export <varname>=<value>
     read "<user input prompted with directory tab-auto-complete>"
     echo "<string to output to stdout>"
+    typeset -f "<name of shell function>"
     cat <path to file that will be printed to stdout>
+    wc -l <path to file to show line count>
     sed -i.backup "s/<match pattern>/<replace pattern in-file>/g" <file-name>
-    tr -d '\n' <file-name>
     grep "<regular expression>" <file to find matches>
-    rsync -az -e "<remote shell command>" --update --delete --progress --existing --ignore-existing <source-path> <destination-path>
+    rsync -az -e "<remote shell command>" --update --delete --progress --existing --ignore-existing --dry-run <source-path> <destination-path>
     python -c "<python 2 / 3 compatible code>"
 
 
@@ -98,6 +101,6 @@
   version of this documentation to standard output.
 
   A script is provided that will automatically walk you through
-  configuration on your local machine. If this file is executed and
+  configuration on your local host. If this file is executed and
   the value `$SYNC_SCRIPT_PATH` does not point to a valid file, a
   prompt to automatically (re)configure will appear.
