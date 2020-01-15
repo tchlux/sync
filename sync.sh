@@ -106,11 +106,11 @@
 # 
 # CONFIGURATION VARIABLES FOR "SYNC" OPERATION.
 #
-export SYNC_SCRIPT_PATH=Git/sync/sync.sh
-export SYNC_SERVER=thomaslux@Macman.local
-export SYNC_SSH_ARGS=""
-export SYNC_SERVER_DIR=Git/sync/server
-export SYNC_LOCAL_DIR=Git/sync/local
+export SYNC_SCRIPT_PATH=
+export SYNC_SERVER=
+export SYNC_SSH_ARGS=
+export SYNC_SERVER_DIR=
+export SYNC_LOCAL_DIR=
 # Directories listed above should NOT have a trailing slash.
 # --------------------------------------------------------------------
 
