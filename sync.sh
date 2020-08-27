@@ -120,34 +120,34 @@ export SYNC_LOCAL_DIR=
 # `start` seconds (since epoch) minus the "ctime" (seconds since epoch) 
 # of individual files.
 find_ctime_seconds () {
-    $(which python || which python3) -c "import sys, os; [sys.stdout.write(os.path.abspath(os.path.join(d,p))+\"\\n\") for (d,_,ps) in os.walk(os.path.abspath(\"$1\")) for p in ps if (os.path.exists(os.path.join(d,p)) and $2 - os.path.getctime(os.path.join(d,p))) < $3]"
+    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys, os; [sys.stdout.write(os.path.abspath(os.path.join(d,p))+\"\\n\") for (d,_,ps) in os.walk(os.path.abspath(\"$1\")) for p in ps if (os.path.exists(os.path.join(d,p)) and $2 - os.path.getctime(os.path.join(d,p))) < $3]"
 }
 
 # Given a `prefix`, read standard input as a file, but add `prefix`
 # before every line. Uses `python` to achieve this.
 with_line_prefix () {
-    $(which python || which python3) -c "import sys; sys.stdout.write(\"$1\"+(\"\\n\"+\"$1\").join([l.rstrip(\"\\n\") for l in sys.stdin.readlines()]))"
+    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys; sys.stdout.write(\"$1\"+(\"\\n\"+\"$1\").join([l.rstrip(\"\\n\") for l in sys.stdin.readlines()]))"
     echo ""
 }
 
 # Use Python to compute the difference between two numbers (supports floats).
 difference () {
-    $(which python || which python3) -c "import sys; sys.stdout.write(str($1 - $2))"
+    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys; sys.stdout.write(str($1 - $2))"
 }
 
 # Use Python to compute the maximum of two numbers (supports floats).
 maximum () {
-    $(which python || which python3) -c "import sys; sys.stdout.write(str(max($1, $2)))"
+    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys; sys.stdout.write(str(max($1, $2)))"
 }
 
 # Use Python to convert seconds since the epoch to a local time date string.
 seconds_to_date () {
-    $(which python || which python3) -c "import sys, time; sys.stdout.write(str(time.ctime(int($1))))"
+    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys, time; sys.stdout.write(str(time.ctime(int($1))))"
 }
 
 # Use Python to generate the time since the epoch in seconds.
 time_in_seconds () {
-    $(which python || which python3) -c "import sys, time; sys.stdout.write(str(int(time.time())))"
+    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys, time; sys.stdout.write(str(int(time.time())))"
 }
 
 # Give the integer number of nonempty lines in a file.
@@ -338,7 +338,7 @@ sync_status () {
 	# Get the number of changed files.
 	sync_changed_count=$(echo "$sync_changed_files" | wc -l)
 	sync_changed_count=$(echo $sync_changed_count)
-	if [ "$sync_changed_count" == "1" ] ; then
+	if [ "$sync_changed_count" = "1" ] ; then
 	    echo "$sync_changed_count file changed or added since last sync:"
 	else
 	    echo "$sync_changed_count files changed or added since last sync:"
@@ -366,18 +366,19 @@ sync () {
     # Use the provided path, otherwise default to the local directory.
     if [ ${#arguments} -gt 0 ] ; then
 	# If the user wants to reconfigure, call that script.
-	if [ "$1" == "--configure" ] ; then sync_configure ; return 0
+	if [ "$1" = "--configure" ] ; then sync_configure ; return 0
 	# If the user wants the status, call that script.
-	elif [ "$1" == "--status" ] ; then
+	elif [ "$1" = "--status" ] ; then
 	    echo ""
 	    sync_show_configuration || return 2
 	    sync_status || return 1
 	    return 0
 	# Do nothing (these option will be used later).
-	elif [ "$1" == "--rename" ] ; then continue
+	elif [ "$1" = "--rename" ] ; then continue
 	else
-	    echo "The `sync` utility provides easy automatic synchronization using"
-	    echo " `rsync` and a single time file to intelligently synchronize files"
+	    echo ""
+	    echo "The 'sync' utility provides easy automatic synchronization using"
+	    echo " 'rsync' and a single time file to intelligently synchronize files"
 	    echo "  between the local host and a server. Use as:"
 	    echo ""
 	    echo " sync [--status] [--configure] [--rename] [--help]"
@@ -417,7 +418,7 @@ sync () {
     # If there are conflicting files, then handle appropriately.
     if [ ${#conflict_files} -gt 0 ] ; then
 	# If "--rename" was specified, automatically rename the conflicts.
-	if [ "$1" == "--rename" ] ; then
+	if [ "$1" = "--rename" ] ; then
 	    suffix="SYNC_CONFLICT_[$(hostname)]_($(date | sed 's/:/-/g' | sed 's/ /_/g'))"
 	    echo "$conflict_files" | with_line_prefix "  making file: "
 	    echo ""
@@ -475,7 +476,7 @@ sync () {
 	echo ""
 	echo "$delete_output" | with_line_prefix "  $local_dir/"
 	echo ""
-	echo -n " Would you like to permantly delete all listed? (y/n) [y]? "
+	echo -n " Would you like to permantly delete all listed local files? (y/n) [y]? "
 	read confirm
 	confirm=${confirm:-y}
 	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
@@ -501,7 +502,7 @@ sync () {
 	echo ""
 	echo "$delete_output" | with_line_prefix "  $SYNC_SERVER_DIR/"
 	echo ""
-	echo -n " Would you like to permantly delete all listed? (y/n) [y]? "
+	echo -n " Would you like to permantly delete all listed server files? (y/n) [y]? "
 	read confirm
 	confirm=${confirm:-y}
 	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
