@@ -4,7 +4,7 @@
 #   |          |                     |
 #   | EMAIL    |  tchlux@vt.edu      |
 #   |          |                     |
-#   | VERSION  |  2020.01.15         |
+#   | VERSION  |  2021.03.03         |
 #   |          |  Basic sync script  |
 #   |          |  with bidirectional |
 #   |          |  `sync` operation.  |
@@ -114,40 +114,49 @@ export SYNC_LOCAL_DIR=
 # Directories listed above should NOT have a trailing slash.
 # --------------------------------------------------------------------
 
-# Given a `path`, `start` and `seconds`, print out all absolute paths
+# Get the last argument passed to this function.
+last_arg () {
+    for value ; do true ; done
+    echo $value
+}
+
+# Get the path to a python executable by getting the last element
+#  returned by `which python3` or if that fails, `which python`.
+export SYNC_PYTHON=$(last_arg $(which python3 2> /dev/null || which python 2> /dev/null || echo "SYNC_ERROR_NO_PYTHON"))
+
+# Given a `path`, and `time`, print out all absolute paths
 # to files in the directory tree under `path` that have been modified
-# in the most recent `seconds` number of seconds as determined by
-# `start` seconds (since epoch) minus the "ctime" (seconds since epoch) 
-# of individual files.
-find_ctime_seconds () {
-    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys, os; [sys.stdout.write(os.path.abspath(os.path.join(d,p))+\"\\n\") for (d,_,ps) in os.walk(os.path.abspath(\"$1\")) for p in ps if (os.path.exists(os.path.join(d,p)) and $2 - os.path.getctime(os.path.join(d,p))) < $3]"
+# more recently than `time` seconds (since epoch).
+find_mtime_seconds () {
+    # Set the environment variable "SYNC_PYTHON" if it is not set.
+    # This has to be done because this function is used through ssh.
+    if [ ${#SYNC_PYTHON} -eq 0 ] ; then
+        export SYNC_PYTHON=$(last_arg $(which python3 2> /dev/null || which python 2> /dev/null || echo "SYNC_ERROR_NO_PYTHON"))
+    fi
+    # Run the find command.
+    $SYNC_PYTHON -c "import sys, os; [sys.stdout.write(os.path.abspath(os.path.join(d,p))+\"\\n\") for (d,ds,ps) in os.walk(os.path.abspath(\"$1\")) for p in (ps+ds) if ((os.path.isfile(os.path.join(d,p)) or os.path.islink(os.path.join(d,p))) and ($2 < os.lstat(os.path.join(d,p)).st_mtime))]"
 }
 
 # Given a `prefix`, read standard input as a file, but add `prefix`
 # before every line. Uses `python` to achieve this.
-with_line_prefix () {
-    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys; sys.stdout.write(\"$1\"+(\"\\n\"+\"$1\").join([l.rstrip(\"\\n\") for l in sys.stdin.readlines()]))"
+add_line_prefix_to_stdin () {
+    $SYNC_PYTHON -c "import sys; sys.stdout.write(\"$1\"+(\"\\n\"+\"$1\").join([l.rstrip(\"\\n\") for l in sys.stdin.readlines()]))"
     echo ""
 }
 
-# Use Python to compute the difference between two numbers (supports floats).
-difference () {
-    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys; sys.stdout.write(str($1 - $2))"
-}
-
-# Use Python to compute the maximum of two numbers (supports floats).
-maximum () {
-    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys; sys.stdout.write(str(max($1, $2)))"
+# Use Python to compute the minimum of two numbers (supports floats).
+minimum () {
+    $SYNC_PYTHON -c "import sys; sys.stdout.write(str(min($1, $2)))"
 }
 
 # Use Python to convert seconds since the epoch to a local time date string.
 seconds_to_date () {
-    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys, time; sys.stdout.write(str(time.ctime(int($1))))"
+    $SYNC_PYTHON -c "import sys, time; sys.stdout.write(str(time.ctime(int($1))))"
 }
 
 # Use Python to generate the time since the epoch in seconds.
 time_in_seconds () {
-    $(which python 2> /dev/null || which python3 2> /dev/null) -c "import sys, time; sys.stdout.write(str(int(time.time())))"
+    $SYNC_PYTHON -c "import sys, time; sys.stdout.write(str(int(time.time())))"
 }
 
 # Give the integer number of nonempty lines in a file.
@@ -167,8 +176,9 @@ sync_show_configuration () {
     echo "  SYNC_SERVER_DIR:  "$SYNC_SERVER_DIR
     echo "  SYNC_LOCAL_DIR:   "$SYNC_LOCAL_DIR
     if [ ${#SYNC_SSH_ARGS} -gt 0 ] ; then
-	echo "  SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
+        echo "  SYNC_SSH_ARGS:    "$SYNC_SSH_ARGS
     fi
+    echo "  SYNC_PYTHON:      "$SYNC_PYTHON
 }
 
 # The initial setup script, this will modify the contents of this file
@@ -253,7 +263,7 @@ sync_configure () {
     echo -n "Configure passwordless ssh (y/n) [n]? "
     read user_query
     user_query=${user_query:-n}
-    user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
+    user_query=$(echo -n "$user_query" | grep "^[Yy]([eE][sS])?$")
     if [ ${#user_query} -gt 0 ] ; then
 	echo ""
 	echo "Checking '$home' for RSA key.."
@@ -274,7 +284,7 @@ sync_configure () {
     echo -n " Add 'sync' command to shell initialization (y/n) [n]? "
     read user_query
     user_query=${user_query:-n}
-    user_query=$(echo -n "$user_query" | grep "^[Yy][eE]*[sS]*$")
+    user_query=$(echo -n "$user_query" | grep "^[Yy]([eE][sS])?$")
     if [ ${#user_query} -gt 0 ] ; then
 	# Ask where to put the 'source' line.
 	echo -n "Shell initialization file (default '$home/.profile'): "
@@ -312,7 +322,7 @@ sync_status () {
 	# If a local sync doesn't exist, we need to set the local time
 	# stamp to be a value certainly less, and copy from the
 	# master to the local! This date corresponds to '0' seconds.
-	echo "0" > $local_dir/.sync_time
+	echo -n "0" > $local_dir/.sync_time
     fi
     # Default value of the master timestamp is the second count "0".
     export SYNC_SERVER_TIMESTAMP=${SYNC_SERVER_TIMESTAMP:-"0"}
@@ -327,24 +337,21 @@ sync_status () {
     echo "Local directory last synchronization date:"
     echo "  $(seconds_to_date $SYNC_LOCAL_TIMESTAMP)"
     echo "___________________________________________"
-    current_time=$(time_in_seconds)
-    seconds_since_local_sync=$(difference $current_time "$SYNC_LOCAL_TIMESTAMP" )
-    seconds_since_serve_sync=$(difference $current_time "$SYNC_SERVER_TIMESTAMP")
-    seconds_since_sync=$(maximum $seconds_since_local_sync $seconds_since_serve_sync)
     # Find all the local files, ignore the ".sync_time" file, and remove leading characters.
-    sync_changed_files=$(find_ctime_seconds "$local_dir" $current_time $seconds_since_sync | grep -v "$local_dir/\.sync_time" | sed "s:^.*$local_dir:$local_dir:g")
+    old_sync_time=$(minimum "$SYNC_LOCAL_TIMESTAMP" "$SYNC_SERVER_TIMESTAMP")
+    sync_changed_files=$(find_mtime_seconds "$local_dir" $old_sync_time | sed "s:^.*$local_dir:$local_dir:g" | ( grep -v "$local_dir/\.sync_time" || echo '' ) )
     if [ ${#sync_changed_files} -gt 0 ] ; then
 	echo ""
 	# Get the number of changed files.
 	sync_changed_count=$(echo "$sync_changed_files" | wc -l)
 	sync_changed_count=$(echo $sync_changed_count)
 	if [ "$sync_changed_count" = "1" ] ; then
-	    echo "$sync_changed_count file changed or added since last sync:"
+	    echo "$sync_changed_count local file changed or added since last sync:"
 	else
-	    echo "$sync_changed_count files changed or added since last sync:"
+	    echo "$sync_changed_count local files changed or added since last sync:"
 	fi
 	echo ""
-	echo "$sync_changed_files" | with_line_prefix "  "
+	echo "$sync_changed_files" | add_line_prefix_to_stdin "  "
 	echo ""
 	echo "-------------------------------------------"
     fi
@@ -374,7 +381,7 @@ sync () {
 	    sync_status || return 1
 	    return 0
 	# Do nothing (these option will be used later).
-	elif [ "$1" = "--rename" ] ; then continue
+	elif [ "$1" = "--rename" ] ; then :
 	else
 	    echo ""
 	    echo "The 'sync' utility provides easy automatic synchronization using"
@@ -403,7 +410,7 @@ sync () {
     # Declare some file names to use in this process.
     sync_files_serve=".sync_files_$(hostname)_transfer_from_server"
     # Find all server files that are newer than this sync time (relative paths only, exclude ".sync_time" file).
-    server_find_command="$(typeset -f find_ctime_seconds); find_ctime_seconds \"$SYNC_SERVER_DIR\" $current_time $seconds_since_sync | sed \"s:.*$SYNC_SERVER_DIR/::g\" | ( grep -v \"\.sync_time\" || echo '' )"
+    server_find_command="$(typeset -f last_arg); $(typeset -f find_mtime_seconds); find_mtime_seconds \"$SYNC_SERVER_DIR\" $old_sync_time | sed \"s:^.*$SYNC_SERVER_DIR/::g\" | ( grep -v \"\.sync_time\" || echo '' )"
     ( ( ssh $SSH_ARGS $SYNC_SERVER "$server_find_command" ) > "$local_dir/$sync_files_serve" ) || return 3
     # Cycle through local files that have been modified, if they are also
     # modified on the server, then reassign their name to have a conflict
@@ -420,7 +427,7 @@ sync () {
 	# If "--rename" was specified, automatically rename the conflicts.
 	if [ "$1" = "--rename" ] ; then
 	    suffix="SYNC_CONFLICT_[$(hostname)]_($(date | sed 's/:/-/g' | sed 's/ /_/g'))"
-	    echo "$conflict_files" | with_line_prefix "  making file: "
+	    echo "$conflict_files" | add_line_prefix_to_stdin "  making file: "
 	    echo ""
 	    while IFS= read -r conflict_file; do
 		mv "$local_dir/$conflict_file" "$local_dir/$conflict_file""_""$suffix"
@@ -430,7 +437,7 @@ sync () {
 	    echo "ERROR: Found conflicting local files. Either rename files or use"
 	    echo "       the '--rename' option to automatically rename files."
 	    echo ""
-	    echo "$conflict_files" | with_line_prefix "  $local_dir/"
+	    echo "$conflict_files" | add_line_prefix_to_stdin "  $local_dir/"
 	    echo ""
 	    # Remove the file that was created to list the new server files.
 	    rm -f "$local_dir/$sync_files_serve"
@@ -474,12 +481,12 @@ sync () {
     if [ ${#delete_output} -gt 0 ] ; then
 	echo " LOCAL DELETIONS"
 	echo ""
-	echo "$delete_output" | with_line_prefix "  $local_dir/"
+	echo "$delete_output" | add_line_prefix_to_stdin "  $local_dir/"
 	echo ""
 	echo -n " Would you like to permantly delete all listed local files? (y/n) [y]? "
 	read confirm
 	confirm=${confirm:-y}
-	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
+	confirm=$(echo -n "$confirm" | grep "^[Yy]([eE][sS])?$")
 	# Only continue with the deletion if it was confirmed.
 	if [ ${#confirm} -gt 0 ] ; then
 	    rsync $sync_args -a --existing --ignore-existing --delete "$serve_dir/" "$local_dir" || return 10
@@ -500,12 +507,12 @@ sync () {
     if [ ${#delete_output} -gt 0 ] ; then
 	echo " SERVER DELETIONS"
 	echo ""
-	echo "$delete_output" | with_line_prefix "  $SYNC_SERVER_DIR/"
+	echo "$delete_output" | add_line_prefix_to_stdin "  $SYNC_SERVER_DIR/"
 	echo ""
 	echo -n " Would you like to permantly delete all listed server files? (y/n) [y]? "
 	read confirm
 	confirm=${confirm:-y}
-	confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
+	confirm=$(echo -n "$confirm" | grep "^[Yy]([eE][sS])?$")
 	# Only continue with the deletion if it was confirmed.
 	if [ ${#confirm} -gt 0 ] ; then
 	    rsync $sync_args -a --delete "$local_dir/" "$serve_dir" || return 12
@@ -536,7 +543,7 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$sync_home/${SYNC_SCRIPT_PATH#$sync
     read confirm
     echo ""
     confirm=${confirm:-y}
-    confirm=$(echo -n "$confirm" | grep "^[Yy][Ee]*[Ss]*$")
+    confirm=$(echo -n "$confirm" | grep "^[Yy]([eE][sS])?$")
     # Only continue if the command was confirmed.
     if [ ${#confirm} -gt 0 ] ; then
 	sync_configure
