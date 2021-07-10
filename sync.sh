@@ -4,7 +4,7 @@
 #   |          |                     |
 #   | EMAIL    |  tchlux@vt.edu      |
 #   |          |                     |
-#   | VERSION  |  2021.03.03         |
+#   | VERSION  |  2021.07.10         |
 #   |          |  Basic sync script  |
 #   |          |  with bidirectional |
 #   |          |  `sync` operation.  |
@@ -205,10 +205,10 @@ sync_configure () {
     user_script_path=${user_script_path:-$default_user_script_path}
     # Check to make sure the script file actually exists at that location.
     while [ ! -f "$home/${user_script_path#$home/}" ] ; do
-	echo "No file exists at '$home/${user_script_path#$home/}'."
-	echo -n "Full path to 'sync' script (default '$home/${default_user_script_path#$home/}'): "
-	read user_script_path
-	user_script_path=${user_script_path:-$default_user_script_path}
+        echo "No file exists at '$home/${user_script_path#$home/}'."
+        echo -n "Full path to 'sync' script (default '$home/${default_user_script_path#$home/}'): "
+        read user_script_path
+        user_script_path=${user_script_path:-$default_user_script_path}
     done
     # Read the rest of the configuration values.
     echo -n "Server ssh identity (default '$default_user_server'): "
@@ -263,20 +263,20 @@ sync_configure () {
     echo -n "Configure passwordless ssh (y/n) [n]? "
     read user_query
     user_query=${user_query:-n}
-    user_query=$(echo -n "$user_query" | grep "^[Yy]([eE][sS])?$")
+    user_query=$(echo -n "$user_query" | grep '^[Yy]\([eE][sS]\)\?$')
     if [ ${#user_query} -gt 0 ] ; then
-	echo ""
-	echo "Checking '$home' for RSA key.."
-	echo ""
-	# Check for the existence of ".ssh" and "id_rsa.pub", if the
-	# public RSA key has not been created, create it.
-	if [ ! -d "$home/.ssh" ] ; then	
-	    ssh-keygen
-	elif [ ! -f "$home/.ssh/id_rsa.pub" ] ; then
-	    ssh-keygen
-	fi
-	# Perform the copy-id operation.
-	ssh-copy-id $SYNC_SERVER
+        echo ""
+        echo "Checking '$home' for RSA key.."
+        echo ""
+        # Check for the existence of ".ssh" and "id_rsa.pub", if the
+        # public RSA key has not been created, create it.
+        if [ ! -d "$home/.ssh" ] ; then    
+            ssh-keygen
+        elif [ ! -f "$home/.ssh/id_rsa.pub" ] ; then
+            ssh-keygen
+        fi
+        # Perform the copy-id operation.
+        ssh-copy-id $SYNC_SERVER
     fi
     echo ""
     echo "If you do not source this script at shell initialization"
@@ -284,17 +284,17 @@ sync_configure () {
     echo -n " Add 'sync' command to shell initialization (y/n) [n]? "
     read user_query
     user_query=${user_query:-n}
-    user_query=$(echo -n "$user_query" | grep "^[Yy]([eE][sS])?$")
+    user_query=$(echo -n "$user_query" | grep '^[Yy]\([eE][sS]\)\?$')
     if [ ${#user_query} -gt 0 ] ; then
-	# Ask where to put the 'source' line.
-	echo -n "Shell initialization file (default '$home/.profile'): "
-	read user_shell_init	
-	user_shell_init=${user_shell_init:-"$home/.profile"}
-	# Make the directory if it does not exist.
-	mkdir -p "$(dirname $user_shell_init)"
-	# Append a line to the file.
-	echo "source $home/${SYNC_SCRIPT_PATH#$home/}" >> $user_shell_init
-	echo ""
+        # Ask where to put the 'source' line.
+        echo -n "Shell initialization file (default '$home/.profile'): "
+        read user_shell_init    
+        user_shell_init=${user_shell_init:-"$home/.profile"}
+        # Make the directory if it does not exist.
+        mkdir -p "$(dirname $user_shell_init)"
+        # Append a line to the file.
+        echo "source $home/${SYNC_SCRIPT_PATH#$home/}" >> $user_shell_init
+        echo ""
     fi
     echo "----------------------------------------------------------------------"
     echo ""
@@ -319,10 +319,10 @@ sync_status () {
     SYNC_SERVER_TIMESTAMP=$(echo -n $SYNC_SERVER_TIMESTAMP | sed "s:^.*SYNC_TIME_IS::g")
     # Create a ".sync_time" file locally if it does not exist.
     if [ ! -f $local_dir/.sync_time ] ; then
-	# If a local sync doesn't exist, we need to set the local time
-	# stamp to be a value certainly less, and copy from the
-	# master to the local! This date corresponds to '0' seconds.
-	echo -n "0" > $local_dir/.sync_time
+        # If a local sync doesn't exist, we need to set the local time
+        # stamp to be a value certainly less, and copy from the
+        # master to the local! This date corresponds to '0' seconds.
+        echo -n "0" > $local_dir/.sync_time
     fi
     # Default value of the master timestamp is the second count "0".
     export SYNC_SERVER_TIMESTAMP=${SYNC_SERVER_TIMESTAMP:-"0"}
@@ -341,19 +341,19 @@ sync_status () {
     old_sync_time=$(minimum "$SYNC_LOCAL_TIMESTAMP" "$SYNC_SERVER_TIMESTAMP")
     sync_changed_files=$(find_mtime_seconds "$local_dir" $old_sync_time | sed "s:^.*$local_dir:$local_dir:g" | ( grep -v "$local_dir/\.sync_time" || echo '' ) )
     if [ ${#sync_changed_files} -gt 0 ] ; then
-	echo ""
-	# Get the number of changed files.
-	sync_changed_count=$(echo "$sync_changed_files" | wc -l)
-	sync_changed_count=$(echo $sync_changed_count)
-	if [ "$sync_changed_count" = "1" ] ; then
-	    echo "$sync_changed_count local file changed or added since last sync:"
-	else
-	    echo "$sync_changed_count local files changed or added since last sync:"
-	fi
-	echo ""
-	echo "$sync_changed_files" | add_line_prefix_to_stdin "  "
-	echo ""
-	echo "-------------------------------------------"
+        echo ""
+        # Get the number of changed files.
+        sync_changed_count=$(echo "$sync_changed_files" | wc -l)
+        sync_changed_count=$(echo $sync_changed_count)
+        if [ "$sync_changed_count" = "1" ] ; then
+            echo "$sync_changed_count local file changed or added since last sync:"
+        else
+            echo "$sync_changed_count local files changed or added since last sync:"
+        fi
+        echo ""
+        echo "$sync_changed_files" | add_line_prefix_to_stdin "  "
+        echo ""
+        echo "-------------------------------------------"
     fi
     echo ""
 }
@@ -372,32 +372,32 @@ sync () {
     arguments=$1
     # Use the provided path, otherwise default to the local directory.
     if [ ${#arguments} -gt 0 ] ; then
-	# If the user wants to reconfigure, call that script.
-	if [ "$1" = "--configure" ] ; then sync_configure ; return 0
-	# If the user wants the status, call that script.
-	elif [ "$1" = "--status" ] ; then
-	    echo ""
-	    sync_show_configuration || return 2
-	    sync_status || return 1
-	    return 0
-	# Do nothing (these option will be used later).
-	elif [ "$1" = "--rename" ] ; then :
-	else
-	    echo ""
-	    echo "The 'sync' utility provides easy automatic synchronization using"
-	    echo " 'rsync' and a single time file to intelligently synchronize files"
-	    echo "  between the local host and a server. Use as:"
-	    echo ""
-	    echo " sync [--status] [--configure] [--rename] [--help]"
-	    echo ""
-	    echo "where the options have the following effects:"
-	    echo "  status     -  Show the synchronization status of the server and local host and exit."
-	    echo "  configure  -  Re-run the built-in configuration script and exit."
-	    echo "  rename     -  Continue execution even with conflicts, automatically rename."
-	    echo "  help       -  Display this help message."
-	    echo ""
-	    return 0
-	fi
+        # If the user wants to reconfigure, call that script.
+        if [ "$1" = "--configure" ] ; then sync_configure ; return 0
+                                           # If the user wants the status, call that script.
+        elif [ "$1" = "--status" ] ; then
+            echo ""
+            sync_show_configuration || return 2
+            sync_status || return 1
+            return 0
+            # Do nothing (these option will be used later).
+        elif [ "$1" = "--rename" ] ; then :
+        else
+            echo ""
+            echo "The 'sync' utility provides easy automatic synchronization using"
+            echo " 'rsync' and a single time file to intelligently synchronize files"
+            echo "  between the local host and a server. Use as:"
+            echo ""
+            echo " sync [--status] [--configure] [--rename] [--help]"
+            echo ""
+            echo "where the options have the following effects:"
+            echo "  status     -  Show the synchronization status of the server and local host and exit."
+            echo "  configure  -  Re-run the built-in configuration script and exit."
+            echo "  rename     -  Continue execution even with conflicts, automatically rename."
+            echo "  help       -  Display this help message."
+            echo ""
+            return 0
+        fi
     fi
     # Call the "sync_status" function that updates the time stamps.
     sync_status || return 1
@@ -416,46 +416,47 @@ sync () {
     # modified on the server, then reassign their name to have a conflict
     # string at the end of the name.
     if [ $(count_nonempty_lines "$local_dir/$sync_files_serve") -gt 0 ] ; then
-	conflict_files=$(echo "$sync_changed_files" \
-			     | sed "s:^$local_dir/::g" \
-			     | grep -Ff "$local_dir/$sync_files_serve")
+        conflict_files=$(echo "$sync_changed_files" \
+                             | sed "s:^$local_dir/::g" \
+                             | grep -Ff "$local_dir/$sync_files_serve")
     else
-	unset conflict_files
+        unset conflict_files
     fi
     # If there are conflicting files, then handle appropriately.
     if [ ${#conflict_files} -gt 0 ] ; then
-	# If "--rename" was specified, automatically rename the conflicts.
-	if [ "$1" = "--rename" ] ; then
-	    suffix="SYNC_CONFLICT_[$(hostname)]_($(date | sed 's/:/-/g' | sed 's/ /_/g'))"
-	    echo "$conflict_files" | add_line_prefix_to_stdin "  making file: "
-	    echo ""
-	    while IFS= read -r conflict_file; do
-		mv "$local_dir/$conflict_file" "$local_dir/$conflict_file""_""$suffix"
-	    done <<< "$conflict_files"
-	# If "--rename" was not specified, raise an error.
-	else
-	    echo "ERROR: Found conflicting local files. Either rename files or use"
-	    echo "       the '--rename' option to automatically rename files."
-	    echo ""
-	    echo "$conflict_files" | add_line_prefix_to_stdin "  $local_dir/"
-	    echo ""
-	    # Remove the file that was created to list the new server files.
-	    rm -f "$local_dir/$sync_files_serve"
-	    return 4
-	fi
+        # If "--rename" was specified, automatically rename the conflicts.
+        if [ "$1" = "--rename" ] ; then
+				suffix="_SYNC_CONFLICT_[$(hostname)]_$(date +%Y-%m-%d_%H-%M-%S_%Z)"
+            while IFS= read -r conflict_file; do
+                echo "  making file: ""$local_dir/$conflict_file$suffix"
+                mv "$local_dir/$conflict_file" "$local_dir/$conflict_file$suffix"
+            done <<< "$conflict_files"
+            echo ""
+            # If "--rename" was not specified, raise an error.
+        else
+            echo "ERROR: Found conflicting local files. Either rename files or use"
+            echo "       the '--rename' option to automatically rename files."
+            echo ""
+            echo "$conflict_files" | add_line_prefix_to_stdin "  $local_dir/"
+            echo ""
+            # Remove the file that was created to list the new server files.
+            rm -f "$local_dir/$sync_files_serve"
+            return 4
+        fi
     fi
     # 
     #         -------------------------------------------
     # 
     # Show a message about what is being `sync`ed to local, if there is anything.
     if [ $(count_nonempty_lines "$local_dir/$sync_files_serve") -gt 0 ] ; then
-	echo " LOCAL <-- SERVER"
-	echo ""
-	# Sync all new files from the server to the local.
-	( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_serve" "$serve_dir" "$local_dir" ) || return 7
-	echo ""
-	echo "-------------------------------------------"
-	echo ""
+        echo " LOCAL <-- SERVER"
+        echo ""
+        # Sync all new files from the server to the local.
+        echo 'rsync '$sync_args' -az --update --progress --files-from="'$local_dir'/'$sync_files_serve'" "'$serve_dir'" "'$local_dir'"'
+        ( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_serve" "$serve_dir" "$local_dir" ) || return 7
+        echo ""
+        echo "-------------------------------------------"
+        echo ""
     fi
     # Identify which files on this host were created since the last sync.
     # Use `sed` to remove the local directory prefix and to skip the
@@ -463,14 +464,15 @@ sync () {
     sync_files_local=".sync_files_$(hostname)_transfer_from_local"
     ( echo "$sync_changed_files" | sed "s:$local_dir/::g" > $local_dir/$sync_files_local ) || return 6
     if [ $(count_nonempty_lines "$local_dir/$sync_files_local") -gt 0 ] ; then    
-	# Show a message about what is being `sync`ed up (always at leaast one file).
-	echo " LOCAL --> SERVER"
-	echo ""
-	# Sync all new files from this local host to the server.
-	( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_local" "$local_dir" "$serve_dir" ) || return 8
-	echo ""
-	echo "-------------------------------------------"
-	echo ""
+        # Show a message about what is being `sync`ed up (always at leaast one file).
+        echo " LOCAL --> SERVER"
+        echo ""
+        # Sync all new files from this local host to the server.
+        echo 'rsync '$sync_args' -az --update --progress --files-from="'$local_dir'/'$sync_files_local'" "'$local_dir'" "'$serve_dir'"'
+        ( rsync $sync_args -az --update --progress --files-from="$local_dir/$sync_files_local" "$local_dir" "$serve_dir" ) || return 8
+        echo ""
+        echo "-------------------------------------------"
+        echo ""
     fi
     # Remove the temporary files used for synchronizing.
     rm -f "$local_dir/$sync_files_local" "$local_dir/$sync_files_serve"
@@ -479,21 +481,22 @@ sync () {
     # Print any outputs that describe a deletion on the local host.
     delete_output=$(echo "$delete_output" | sed 's:^.*deleting:deleting:g' | grep "deleting" | sed 's:^deleting ::g')
     if [ ${#delete_output} -gt 0 ] ; then
-	echo " LOCAL DELETIONS"
-	echo ""
-	echo "$delete_output" | add_line_prefix_to_stdin "  $local_dir/"
-	echo ""
-	echo -n " Would you like to permantly delete all listed local files? (y/n) [y]? "
-	read confirm
-	confirm=${confirm:-y}
-	confirm=$(echo -n "$confirm" | grep "^[Yy]([eE][sS])?$")
-	# Only continue with the deletion if it was confirmed.
-	if [ ${#confirm} -gt 0 ] ; then
-	    rsync $sync_args -a --existing --ignore-existing --delete "$serve_dir/" "$local_dir" || return 10
-	fi
-	echo ""
-	echo "-------------------------------------------"
-	echo ""
+        echo " LOCAL DELETIONS"
+        echo ""
+        echo "$delete_output" | add_line_prefix_to_stdin "  $local_dir/"
+        echo ""
+        echo -n " Would you like to permantly delete all listed local files? (y/n) [y]? "
+        read confirm
+        confirm=${confirm:-y}
+        confirm=$(echo -n "$confirm" | grep '^[Yy]\([eE][sS]\)\?$')
+        # Only continue with the deletion if it was confirmed.
+        if [ ${#confirm} -gt 0 ] ; then
+            echo '  rsync '$sync_args' -a --existing --ignore-existing --delete "'$serve_dir'/" "'$local_dir'"'
+            rsync $sync_args -a --existing --ignore-existing --delete "$serve_dir/" "$local_dir" || return 10
+        fi
+        echo ""
+        echo "-------------------------------------------"
+        echo ""
     fi
     # Overwrite the ".sync_time" file, because a synchronization has
     # happened. Record the current `time_in_seconds` so that all the
@@ -505,25 +508,27 @@ sync () {
     # Print any outputs that describe a deletion on the server.
     delete_output=$(echo "$delete_output" | sed 's:^.*deleting:deleting:g' | grep "deleting" | sed 's:^deleting ::g')
     if [ ${#delete_output} -gt 0 ] ; then
-	echo " SERVER DELETIONS"
-	echo ""
-	echo "$delete_output" | add_line_prefix_to_stdin "  $SYNC_SERVER_DIR/"
-	echo ""
-	echo -n " Would you like to permantly delete all listed server files? (y/n) [y]? "
-	read confirm
-	confirm=${confirm:-y}
-	confirm=$(echo -n "$confirm" | grep "^[Yy]([eE][sS])?$")
-	# Only continue with the deletion if it was confirmed.
-	if [ ${#confirm} -gt 0 ] ; then
-	    rsync $sync_args -a --delete "$local_dir/" "$serve_dir" || return 12
-	fi
-	echo ""
-	echo "-------------------------------------------"
-	echo ""
-    else
-	# We have to send over the ".sync_time" file regardless.
-	rsync $sync_args -a "$local_dir/.sync_time" "$serve_dir/" || return 13
+        echo " SERVER DELETIONS"
+        echo ""
+        echo "$delete_output" | add_line_prefix_to_stdin "  $SYNC_SERVER_DIR/"
+        echo ""
+        echo -n " Would you like to permantly delete all listed server files? (y/n) [y]? "
+        read confirm
+        confirm=${confirm:-y}
+        confirm=$(echo -n "$confirm" | grep '^[Yy]\([eE][sS]\)\?$')
+        # Only continue with the deletion if it was confirmed.
+        if [ ${#confirm} -gt 0 ] ; then
+            echo '  rsync '$sync_args' -a --delete "'$local_dir'/" "'$serve_dir'"'
+            rsync $sync_args -a --delete "$local_dir/" "$serve_dir" || return 12
+        fi
+        echo ""
+        echo "-------------------------------------------"
+        echo ""
     fi
+    # We have to send over the ".sync_time" file regardless.
+    echo 'rsync '$sync_args' -a "'$local_dir/.sync_time'" "'$serve_dir'/"'
+    rsync $sync_args -a "$local_dir/.sync_time" "$serve_dir/" || return 13
+
     # End of successful execution.
     return 0
 }
@@ -543,35 +548,35 @@ if [ ${#SYNC_SCRIPT_PATH} -eq 0 ] || [ ! -f "$sync_home/${SYNC_SCRIPT_PATH#$sync
     read confirm
     echo ""
     confirm=${confirm:-y}
-    confirm=$(echo -n "$confirm" | grep "^[Yy]([eE][sS])?$")
+    confirm=$(echo -n "$confirm" | grep '^[Yy]\([eE][sS]\)\?$')
     # Only continue if the command was confirmed.
     if [ ${#confirm} -gt 0 ] ; then
-	sync_configure
+        sync_configure
     else
-	# If the user refuses to configure the sync script, then update
-	# the file to prevent it from asking the question again.
-	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
-	echo    "To prevent further requests, provide the"
-	echo -n " path to this 'sync' script: "
-	read user_script_path
-	user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
-	# Check to make sure the script file actually exists at that location.
-	while [ ! -f "$user_script_path" ] ; do
-	    echo "No file exists at '$user_script_path'."
-	    echo -n "Enter full path to 'sync' script: "
-	    read user_script_path
-	    user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
-	done
-	# Convert the provided path to an absolute path.
-	start_dir=$(pwd)
-	cd "$(dirname $user_script_path)" > /dev/null 2> /dev/null
-	user_script_path=$(pwd)/$(basename $user_script_path)
-	cd "$start_dir" > /dev/null 2> /dev/null
-	# Update the "export SYNC_SCRIPT_PATH" line to prevent further questioning.
-	replacement="$(echo "$user_script_path" | sed 's/[\/&]/\\&/g')"
-	sed -i.backup "s/^export SYNC_SCRIPT_PATH=.*$/export SYNC_SCRIPT_PATH=$replacement/g" $user_script_path
-	rm $user_script_path.backup
-	echo ""
+        # If the user refuses to configure the sync script, then update
+        # the file to prevent it from asking the question again.
+        user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+        echo    "To prevent further requests, provide the"
+        echo -n " path to this 'sync' script: "
+        read user_script_path
+        user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+        # Check to make sure the script file actually exists at that location.
+        while [ ! -f "$user_script_path" ] ; do
+            echo "No file exists at '$user_script_path'."
+            echo -n "Enter full path to 'sync' script: "
+            read user_script_path
+            user_script_path=${user_script_path:-"$(pwd)/sync.sh"}
+        done
+        # Convert the provided path to an absolute path.
+        start_dir=$(pwd)
+        cd "$(dirname $user_script_path)" > /dev/null 2> /dev/null
+        user_script_path=$(pwd)/$(basename $user_script_path)
+        cd "$start_dir" > /dev/null 2> /dev/null
+        # Update the "export SYNC_SCRIPT_PATH" line to prevent further questioning.
+        replacement="$(echo "$user_script_path" | sed 's/[\/&]/\\&/g')"
+        sed -i.backup "s/^export SYNC_SCRIPT_PATH=.*$/export SYNC_SCRIPT_PATH=$replacement/g" $user_script_path
+        rm $user_script_path.backup
+        echo ""
     fi
 fi
 # Remove the extra 'home' variable from the shell.
